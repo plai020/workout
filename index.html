@@ -1,0 +1,958 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>運動生活整合日曆</title>
+  <meta name="description" content="運動生活整合日曆 PWA 測試版" />
+  <meta name="theme-color" content="#10131a" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="運動日曆" />
+  <link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 180 180'%3E%3Crect width='180' height='180' rx='40' fill='%2310131a'/%3E%3Ccircle cx='90' cy='90' r='48' fill='%233b82f6'/%3E%3Cpath d='M62 90h56M90 62v56' stroke='white' stroke-width='10' stroke-linecap='round'/%3E%3C/svg%3E" />
+  <style>
+    :root {
+      --bg: #f3f5fa;
+      --panel: #ffffff;
+      --card: #f8f9fd;
+      --text: #111827;
+      --muted: #6b7280;
+      --border: #d8deea;
+      --accent: #2563eb;
+      --danger: #dc2626;
+      --walk: #f59e0b;
+      --hike: #2563eb;
+      --lift: #7c3aed;
+      --run: #ef4444;
+      --today-ring: #10b981;
+      --shadow: 0 10px 24px rgba(9, 14, 26, 0.08);
+    }
+
+    .theme-dark {
+      --bg: #090c12;
+      --panel: #121724;
+      --card: #192132;
+      --text: #e5e7eb;
+      --muted: #98a2b3;
+      --border: #2a3449;
+      --accent: #60a5fa;
+      --today-ring: #34d399;
+      --shadow: 0 10px 24px rgba(0, 0, 0, 0.3);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      font-family: "Segoe UI", "Noto Sans TC", system-ui, -apple-system, sans-serif;
+      background: linear-gradient(180deg, var(--bg), var(--bg));
+      color: var(--text);
+      min-height: 100vh;
+      padding: env(safe-area-inset-top) 12px calc(env(safe-area-inset-bottom) + 16px);
+    }
+
+    .app {
+      max-width: 980px;
+      margin: 0 auto;
+      display: grid;
+      gap: 12px;
+    }
+
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      box-shadow: var(--shadow);
+      padding: 12px;
+    }
+
+    .header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .title-block h1 {
+      margin: 0;
+      font-size: 1.2rem;
+      letter-spacing: 0.02em;
+    }
+
+    .title-block p {
+      margin: 4px 0 0;
+      color: var(--muted);
+      font-size: 0.88rem;
+    }
+
+    .actions {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    button,
+    .btn-like,
+    select,
+    input,
+    textarea {
+      font: inherit;
+      color: inherit;
+    }
+
+    button {
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: var(--card);
+      padding: 8px 10px;
+      cursor: pointer;
+    }
+
+    button:hover {
+      border-color: var(--accent);
+    }
+
+    .btn-primary {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #fff;
+    }
+
+    .calendar-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 10px;
+      gap: 10px;
+    }
+
+    .month-label {
+      font-weight: 700;
+      font-size: 1.03rem;
+      min-width: 145px;
+      text-align: center;
+    }
+
+    .calendar-grid {
+      display: grid;
+      grid-template-columns: repeat(7, minmax(0, 1fr));
+      gap: 6px;
+    }
+
+    .dow {
+      text-align: center;
+      color: var(--muted);
+      font-size: 0.82rem;
+      padding: 6px 0;
+    }
+
+    .day-cell {
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: var(--card);
+      min-height: 76px;
+      padding: 6px;
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+      cursor: pointer;
+      transition: border-color 0.2s, transform 0.1s;
+    }
+
+    .day-cell:hover {
+      border-color: var(--accent);
+      transform: translateY(-1px);
+    }
+
+    .day-cell.outside {
+      opacity: 0.4;
+    }
+
+    .day-cell.today {
+      border: 2px solid var(--today-ring);
+      padding: 5px;
+    }
+
+    .day-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 4px;
+    }
+
+    .day-num {
+      font-size: 0.82rem;
+      font-weight: 700;
+    }
+
+    .dot-wrap {
+      display: flex;
+      gap: 4px;
+    }
+
+    .dot {
+      width: 9px;
+      height: 9px;
+      border-radius: 50%;
+      display: inline-block;
+    }
+
+    .dot.run { background: var(--run); }
+    .dot.walk { background: var(--walk); }
+    .dot.hike { background: var(--hike); }
+    .dot.lift { background: var(--lift); }
+
+    .title-preview {
+      font-size: 0.75rem;
+      border-radius: 8px;
+      padding: 2px 5px;
+      color: #fff;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .preview-run { background: color-mix(in oklab, var(--run) 90%, #111); }
+    .preview-walk { background: color-mix(in oklab, var(--walk) 90%, #111); }
+    .preview-hike { background: color-mix(in oklab, var(--hike) 90%, #111); }
+    .preview-lift { background: color-mix(in oklab, var(--lift) 90%, #111); }
+
+    .legend {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-top: 8px;
+      color: var(--muted);
+      font-size: 0.83rem;
+    }
+
+    .legend span {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    .editor-grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 10px;
+    }
+
+    .selected-date {
+      font-weight: 700;
+    }
+
+    .field {
+      display: grid;
+      gap: 4px;
+    }
+
+    label {
+      font-size: 0.86rem;
+      color: var(--muted);
+    }
+
+    input,
+    select,
+    textarea {
+      border: 1px solid var(--border);
+      background: var(--card);
+      border-radius: 10px;
+      padding: 8px;
+      width: 100%;
+    }
+
+    textarea {
+      min-height: 84px;
+      resize: vertical;
+    }
+
+    .section-title {
+      margin: 2px 0 -2px;
+      font-size: 0.84rem;
+      color: var(--muted);
+      font-weight: 700;
+      letter-spacing: 0.02em;
+    }
+
+    .grid-two {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+    }
+
+    .hidden {
+      display: none !important;
+    }
+
+    .entry-list {
+      margin-top: 10px;
+      display: grid;
+      gap: 8px;
+    }
+
+    .entry {
+      border: 1px solid var(--border);
+      background: var(--card);
+      border-radius: 10px;
+      padding: 8px;
+    }
+
+    .entry-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 4px;
+    }
+
+    .tag {
+      font-size: 0.75rem;
+      font-weight: 700;
+      color: #fff;
+      border-radius: 8px;
+      padding: 2px 6px;
+    }
+
+    .tag.run { background: var(--run); }
+    .tag.walk { background: var(--walk); }
+    .tag.hike { background: var(--hike); }
+    .tag.lift { background: var(--lift); }
+
+    .timer-wrap {
+      display: grid;
+      gap: 8px;
+    }
+
+    .timer-display {
+      text-align: center;
+      font-size: 2rem;
+      font-weight: 800;
+      letter-spacing: 0.04em;
+      border: 1px dashed var(--border);
+      border-radius: 12px;
+      padding: 10px;
+      background: var(--card);
+    }
+
+    .quick-row {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 6px;
+    }
+
+    .danger {
+      color: #fff;
+      background: var(--danger);
+      border-color: var(--danger);
+    }
+
+    .footer-note {
+      color: var(--muted);
+      text-align: center;
+      font-size: 0.78rem;
+    }
+
+    @media (min-width: 860px) {
+      .editor-grid {
+        grid-template-columns: 1.2fr 1fr;
+      }
+    }
+
+    @media (max-width: 640px) {
+      body {
+        padding-left: 8px;
+        padding-right: 8px;
+      }
+
+      .day-cell {
+        min-height: 64px;
+      }
+
+      .title-preview {
+        font-size: 0.7rem;
+      }
+
+      .quick-row {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <section class="panel header">
+      <div class="title-block">
+        <h1>運動生活整合日曆</h1>
+        <p>健身數據儀錶板風格：月曆 + 行程 + 訓練紀錄</p>
+      </div>
+      <div class="actions">
+        <button id="toggleThemeBtn" type="button">切換深色模式</button>
+        <button id="exportBtn" type="button">匯出備份</button>
+        <button id="importBtn" type="button">匯入紀錄</button>
+        <input id="importFile" type="file" accept="application/json" class="hidden" />
+      </div>
+    </section>
+
+    <section class="panel">
+      <div class="calendar-head">
+        <button id="prevMonthBtn" type="button" aria-label="上個月">◀</button>
+        <div id="monthLabel" class="month-label"></div>
+        <button id="nextMonthBtn" type="button" aria-label="下個月">▶</button>
+      </div>
+      <div id="calendarGrid" class="calendar-grid"></div>
+      <div class="legend">
+        <span><i class="dot run"></i>跑步</span>
+        <span><i class="dot walk"></i>散步</span>
+        <span><i class="dot hike"></i>登山</span>
+        <span><i class="dot lift"></i>重訓</span>
+      </div>
+    </section>
+
+    <section class="panel editor-grid">
+      <div>
+        <div class="selected-date" id="selectedDateText">請先點選月曆日期</div>
+        <form id="entryForm">
+          <div class="field">
+            <label for="type">運動分類</label>
+            <select id="type" required>
+              <option value="run">跑步</option>
+              <option value="walk">散步</option>
+              <option value="hike">登山</option>
+              <option value="lift">重訓</option>
+            </select>
+          </div>
+
+          <div class="field">
+            <label for="title">標題</label>
+            <input id="title" maxlength="45" placeholder="例如：乳酸閾值跑 / 背肌訓練" required />
+          </div>
+
+          <div class="field">
+            <label for="content">詳細內容</label>
+            <textarea id="content" placeholder="可記錄感受、路線、目標、飲食、恢復狀態等"></textarea>
+          </div>
+
+          <div id="outdoorFields">
+            <div class="section-title">戶外運動專屬</div>
+            <div class="grid-two">
+              <div class="field">
+                <label for="distance">距離 (km)</label>
+                <input id="distance" type="number" step="0.1" min="0" />
+              </div>
+              <div class="field">
+                <label for="duration">總時間 (分鐘)</label>
+                <input id="duration" type="number" step="1" min="0" />
+              </div>
+              <div class="field">
+                <label for="elevationUp">上升 (m)</label>
+                <input id="elevationUp" type="number" step="1" min="0" />
+              </div>
+              <div class="field">
+                <label for="elevationDown">下降 (m)</label>
+                <input id="elevationDown" type="number" step="1" min="0" />
+              </div>
+            </div>
+          </div>
+
+          <div id="liftFields" class="hidden">
+            <div class="section-title">重訓專屬</div>
+            <div class="grid-two">
+              <div class="field">
+                <label for="bodyPart">部位</label>
+                <input id="bodyPart" placeholder="胸 / 背 / 腿 / 肩..." />
+              </div>
+              <div class="field">
+                <label for="exercise">動作</label>
+                <input id="exercise" placeholder="深蹲 / 臥推 / 硬舉..." />
+              </div>
+              <div class="field">
+                <label for="weight">重量 (kg)</label>
+                <input id="weight" type="number" step="0.5" min="0" />
+              </div>
+              <div class="field">
+                <label for="setsReps">組數 / 次數</label>
+                <input id="setsReps" placeholder="例如：4 x 8" />
+              </div>
+            </div>
+          </div>
+
+          <div class="actions" style="margin-top:10px;">
+            <button class="btn-primary" type="submit">儲存紀錄</button>
+            <button id="clearFormBtn" type="button">清空表單</button>
+          </div>
+        </form>
+
+        <div id="entryList" class="entry-list"></div>
+      </div>
+
+      <div>
+        <div class="section-title">重訓倒數碼錶</div>
+        <div class="timer-wrap">
+          <div id="timerDisplay" class="timer-display">00:00</div>
+          <div class="quick-row">
+            <button class="quick-btn" data-sec="30" type="button">30s</button>
+            <button class="quick-btn" data-sec="60" type="button">60s</button>
+            <button class="quick-btn" data-sec="90" type="button">90s</button>
+            <button class="quick-btn" data-sec="120" type="button">120s</button>
+          </div>
+          <div class="grid-two">
+            <div class="field">
+              <label for="customSec">自訂秒數</label>
+              <input id="customSec" type="number" min="1" step="1" placeholder="輸入秒數" />
+            </div>
+            <div style="display:flex;align-items:flex-end;gap:8px;">
+              <button id="startCustomBtn" class="btn-primary" type="button">開始</button>
+              <button id="stopTimerBtn" class="danger" type="button">停止</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <div class="footer-note">資料皆儲存在本機 LocalStorage，可匯出 JSON 備份。</div>
+  </div>
+
+  <script>
+    const STORAGE_KEY = "workout_life_calendar_v1";
+    const THEME_KEY = "workout_theme_v1";
+    const DAY_NAMES = ["日", "一", "二", "三", "四", "五", "六"];
+
+    const state = {
+      cursorDate: new Date(),
+      selectedDateKey: toDateKey(new Date()),
+      records: loadRecords(),
+      timerLeft: 0,
+      timerId: null
+    };
+
+    const els = {
+      monthLabel: document.getElementById("monthLabel"),
+      calendarGrid: document.getElementById("calendarGrid"),
+      prevMonthBtn: document.getElementById("prevMonthBtn"),
+      nextMonthBtn: document.getElementById("nextMonthBtn"),
+      selectedDateText: document.getElementById("selectedDateText"),
+      entryForm: document.getElementById("entryForm"),
+      type: document.getElementById("type"),
+      title: document.getElementById("title"),
+      content: document.getElementById("content"),
+      distance: document.getElementById("distance"),
+      duration: document.getElementById("duration"),
+      elevationUp: document.getElementById("elevationUp"),
+      elevationDown: document.getElementById("elevationDown"),
+      bodyPart: document.getElementById("bodyPart"),
+      exercise: document.getElementById("exercise"),
+      weight: document.getElementById("weight"),
+      setsReps: document.getElementById("setsReps"),
+      outdoorFields: document.getElementById("outdoorFields"),
+      liftFields: document.getElementById("liftFields"),
+      clearFormBtn: document.getElementById("clearFormBtn"),
+      entryList: document.getElementById("entryList"),
+      toggleThemeBtn: document.getElementById("toggleThemeBtn"),
+      exportBtn: document.getElementById("exportBtn"),
+      importBtn: document.getElementById("importBtn"),
+      importFile: document.getElementById("importFile"),
+      timerDisplay: document.getElementById("timerDisplay"),
+      customSec: document.getElementById("customSec"),
+      startCustomBtn: document.getElementById("startCustomBtn"),
+      stopTimerBtn: document.getElementById("stopTimerBtn")
+    };
+
+    function init() {
+      applySavedTheme();
+      attachEvents();
+      renderCalendar();
+      renderDayRecords();
+      updateTypeFields();
+      initPwaManifest();
+      resetTimerDisplay();
+    }
+
+    function attachEvents() {
+      els.prevMonthBtn.addEventListener("click", () => {
+        state.cursorDate = new Date(state.cursorDate.getFullYear(), state.cursorDate.getMonth() - 1, 1);
+        renderCalendar();
+      });
+
+      els.nextMonthBtn.addEventListener("click", () => {
+        state.cursorDate = new Date(state.cursorDate.getFullYear(), state.cursorDate.getMonth() + 1, 1);
+        renderCalendar();
+      });
+
+      els.type.addEventListener("change", updateTypeFields);
+
+      els.entryForm.addEventListener("submit", (e) => {
+        e.preventDefault();
+        saveEntry();
+      });
+
+      els.clearFormBtn.addEventListener("click", clearForm);
+
+      els.toggleThemeBtn.addEventListener("click", toggleTheme);
+
+      els.exportBtn.addEventListener("click", exportData);
+      els.importBtn.addEventListener("click", () => els.importFile.click());
+      els.importFile.addEventListener("change", importData);
+
+      document.querySelectorAll(".quick-btn").forEach((btn) => {
+        btn.addEventListener("click", () => startTimer(Number(btn.dataset.sec)));
+      });
+
+      els.startCustomBtn.addEventListener("click", () => {
+        const sec = Number(els.customSec.value);
+        if (!Number.isFinite(sec) || sec < 1) {
+          alert("請輸入大於 0 的秒數");
+          return;
+        }
+        startTimer(sec);
+      });
+
+      els.stopTimerBtn.addEventListener("click", stopTimer);
+    }
+
+    function renderCalendar() {
+      const y = state.cursorDate.getFullYear();
+      const m = state.cursorDate.getMonth();
+      els.monthLabel.textContent = `${y} 年 ${m + 1} 月`;
+      els.calendarGrid.innerHTML = "";
+
+      DAY_NAMES.forEach((d) => {
+        const el = document.createElement("div");
+        el.className = "dow";
+        el.textContent = d;
+        els.calendarGrid.appendChild(el);
+      });
+
+      const firstDay = new Date(y, m, 1);
+      const startWeekday = firstDay.getDay();
+      const lastDate = new Date(y, m + 1, 0).getDate();
+      const prevLastDate = new Date(y, m, 0).getDate();
+      const total = 42;
+
+      for (let i = 0; i < total; i++) {
+        const cell = document.createElement("button");
+        cell.type = "button";
+        cell.className = "day-cell";
+
+        let dayNum;
+        let dDate;
+        if (i < startWeekday) {
+          dayNum = prevLastDate - startWeekday + i + 1;
+          dDate = new Date(y, m - 1, dayNum);
+          cell.classList.add("outside");
+        } else if (i >= startWeekday + lastDate) {
+          dayNum = i - (startWeekday + lastDate) + 1;
+          dDate = new Date(y, m + 1, dayNum);
+          cell.classList.add("outside");
+        } else {
+          dayNum = i - startWeekday + 1;
+          dDate = new Date(y, m, dayNum);
+        }
+
+        const key = toDateKey(dDate);
+        const dayRecords = state.records[key] || [];
+
+        if (key === toDateKey(new Date())) {
+          cell.classList.add("today");
+        }
+
+        const dotWrap = document.createElement("div");
+        dotWrap.className = "dot-wrap";
+        const uniqueTypes = [...new Set(dayRecords.map((r) => r.type))].slice(0, 4);
+        uniqueTypes.forEach((t) => {
+          const dot = document.createElement("span");
+          dot.className = `dot ${t}`;
+          dotWrap.appendChild(dot);
+        });
+
+        const dayTop = document.createElement("div");
+        dayTop.className = "day-top";
+        dayTop.innerHTML = `<span class="day-num">${dayNum}</span>`;
+        dayTop.appendChild(dotWrap);
+
+        cell.appendChild(dayTop);
+
+        const firstTitle = dayRecords.find((r) => r.title)?.title;
+        if (firstTitle) {
+          const preview = document.createElement("div");
+          const firstType = dayRecords[0]?.type || "run";
+          preview.className = `title-preview preview-${firstType}`;
+          preview.textContent = firstTitle;
+          cell.appendChild(preview);
+        }
+
+        cell.addEventListener("click", () => {
+          state.selectedDateKey = key;
+          state.cursorDate = new Date(dDate.getFullYear(), dDate.getMonth(), 1);
+          renderCalendar();
+          renderDayRecords();
+        });
+
+        els.calendarGrid.appendChild(cell);
+      }
+    }
+
+    function renderDayRecords() {
+      const [yy, mm, dd] = state.selectedDateKey.split("-").map(Number);
+      els.selectedDateText.textContent = `已選日期：${yy}/${mm}/${dd}`;
+      const records = state.records[state.selectedDateKey] || [];
+
+      if (!records.length) {
+        els.entryList.innerHTML = `<div class="entry">此日期尚無紀錄，請新增。</div>`;
+        return;
+      }
+
+      els.entryList.innerHTML = records.map((r) => {
+        const meta = [];
+        if (r.type === "lift") {
+          if (r.bodyPart) meta.push(`部位：${escapeHtml(r.bodyPart)}`);
+          if (r.exercise) meta.push(`動作：${escapeHtml(r.exercise)}`);
+          if (r.weight) meta.push(`重量：${escapeHtml(String(r.weight))}kg`);
+          if (r.setsReps) meta.push(`組次：${escapeHtml(r.setsReps)}`);
+        } else {
+          if (r.distance) meta.push(`距離：${escapeHtml(String(r.distance))}km`);
+          if (r.duration) meta.push(`時間：${escapeHtml(String(r.duration))} 分`);
+          if (r.elevationUp) meta.push(`上升：${escapeHtml(String(r.elevationUp))}m`);
+          if (r.elevationDown) meta.push(`下降：${escapeHtml(String(r.elevationDown))}m`);
+        }
+
+        return `
+          <div class="entry">
+            <div class="entry-top">
+              <strong>${escapeHtml(r.title || "未命名")}</strong>
+              <span class="tag ${r.type}">${typeLabel(r.type)}</span>
+            </div>
+            <div style="font-size:0.85rem;color:var(--muted);margin-bottom:4px;">${escapeHtml(r.content || "（無詳細內容）")}</div>
+            <div style="font-size:0.8rem;color:var(--muted);">${meta.join(" ｜ ") || "—"}</div>
+          </div>
+        `;
+      }).join("");
+    }
+
+    function saveEntry() {
+      if (!state.selectedDateKey) {
+        alert("請先點選日期");
+        return;
+      }
+
+      const type = els.type.value;
+      const payload = {
+        id: crypto.randomUUID(),
+        type,
+        title: els.title.value.trim(),
+        content: els.content.value.trim(),
+        createdAt: Date.now()
+      };
+
+      if (!payload.title) {
+        alert("請輸入標題");
+        return;
+      }
+
+      if (type === "lift") {
+        payload.bodyPart = els.bodyPart.value.trim();
+        payload.exercise = els.exercise.value.trim();
+        payload.weight = normalizeNumber(els.weight.value);
+        payload.setsReps = els.setsReps.value.trim();
+      } else {
+        payload.distance = normalizeNumber(els.distance.value);
+        payload.duration = normalizeNumber(els.duration.value);
+        payload.elevationUp = normalizeNumber(els.elevationUp.value);
+        payload.elevationDown = normalizeNumber(els.elevationDown.value);
+      }
+
+      if (!state.records[state.selectedDateKey]) {
+        state.records[state.selectedDateKey] = [];
+      }
+      state.records[state.selectedDateKey].unshift(payload);
+
+      persistRecords();
+      clearForm();
+      renderCalendar();
+      renderDayRecords();
+    }
+
+    function clearForm() {
+      els.entryForm.reset();
+      updateTypeFields();
+    }
+
+    function updateTypeFields() {
+      const isLift = els.type.value === "lift";
+      els.liftFields.classList.toggle("hidden", !isLift);
+      els.outdoorFields.classList.toggle("hidden", isLift);
+    }
+
+    function persistRecords() {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state.records));
+    }
+
+    function loadRecords() {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        const parsed = raw ? JSON.parse(raw) : {};
+        return parsed && typeof parsed === "object" ? parsed : {};
+      } catch {
+        return {};
+      }
+    }
+
+    function exportData() {
+      const blob = new Blob([JSON.stringify(state.records, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      const d = new Date();
+      const stamp = `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, "0")}${String(d.getDate()).padStart(2, "0")}`;
+      a.href = url;
+      a.download = `workout-calendar-backup-${stamp}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+
+    async function importData(e) {
+      const file = e.target.files?.[0];
+      if (!file) return;
+      try {
+        const text = await file.text();
+        const parsed = JSON.parse(text);
+        if (!parsed || typeof parsed !== "object") {
+          throw new Error("格式錯誤");
+        }
+        state.records = parsed;
+        persistRecords();
+        renderCalendar();
+        renderDayRecords();
+        alert("匯入完成");
+      } catch (err) {
+        alert(`匯入失敗：${err.message}`);
+      } finally {
+        e.target.value = "";
+      }
+    }
+
+    function toggleTheme() {
+      const isDark = document.body.classList.toggle("theme-dark");
+      localStorage.setItem(THEME_KEY, isDark ? "dark" : "light");
+    }
+
+    function applySavedTheme() {
+      const saved = localStorage.getItem(THEME_KEY);
+      if (saved === "dark") document.body.classList.add("theme-dark");
+    }
+
+    function toDateKey(date) {
+      const y = date.getFullYear();
+      const m = String(date.getMonth() + 1).padStart(2, "0");
+      const d = String(date.getDate()).padStart(2, "0");
+      return `${y}-${m}-${d}`;
+    }
+
+    function normalizeNumber(v) {
+      if (v === "" || v == null) return null;
+      const n = Number(v);
+      return Number.isFinite(n) ? n : null;
+    }
+
+    function typeLabel(type) {
+      return {
+        run: "跑步",
+        walk: "散步",
+        hike: "登山",
+        lift: "重訓"
+      }[type] || type;
+    }
+
+    function formatTimer(sec) {
+      const m = Math.floor(sec / 60);
+      const s = sec % 60;
+      return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+    }
+
+    function resetTimerDisplay() {
+      els.timerDisplay.textContent = formatTimer(state.timerLeft);
+    }
+
+    function startTimer(seconds) {
+      stopTimer();
+      state.timerLeft = Math.max(0, Math.floor(seconds));
+      resetTimerDisplay();
+      state.timerId = setInterval(() => {
+        state.timerLeft -= 1;
+        resetTimerDisplay();
+        if (state.timerLeft <= 0) {
+          stopTimer();
+          playBeep();
+        }
+      }, 1000);
+    }
+
+    function stopTimer() {
+      if (state.timerId) {
+        clearInterval(state.timerId);
+        state.timerId = null;
+      }
+    }
+
+    function playBeep() {
+      try {
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = "sine";
+        osc.frequency.value = 880;
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        gain.gain.setValueAtTime(0.0001, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.25, audioCtx.currentTime + 0.01);
+        gain.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + 0.35);
+        osc.start();
+        osc.stop(audioCtx.currentTime + 0.35);
+      } catch {
+        alert("嗶！休息時間到");
+      }
+    }
+
+    function escapeHtml(s) {
+      return String(s)
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#39;");
+    }
+
+    // 單檔測試版本：動態注入 manifest，方便直接試作 A2HS。
+    function initPwaManifest() {
+      const manifest = {
+        name: "運動生活整合日曆",
+        short_name: "運動日曆",
+        display: "standalone",
+        background_color: "#090c12",
+        theme_color: "#10131a",
+        start_url: ".",
+        icons: [
+          {
+            src: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'%3E%3Crect width='192' height='192' rx='40' fill='%2310131a'/%3E%3Ccircle cx='96' cy='96' r='52' fill='%2360a5fa'/%3E%3Cpath d='M66 96h60M96 66v60' stroke='white' stroke-width='12' stroke-linecap='round'/%3E%3C/svg%3E",
+            sizes: "192x192",
+            type: "image/svg+xml"
+          },
+          {
+            src: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'%3E%3Crect width='512' height='512' rx='88' fill='%2310131a'/%3E%3Ccircle cx='256' cy='256' r='150' fill='%2360a5fa'/%3E%3Cpath d='M170 256h172M256 170v172' stroke='white' stroke-width='30' stroke-linecap='round'/%3E%3C/svg%3E",
+            sizes: "512x512",
+            type: "image/svg+xml"
+          }
+        ]
+      };
+      const link = document.createElement("link");
+      link.rel = "manifest";
+      link.href = URL.createObjectURL(new Blob([JSON.stringify(manifest)], { type: "application/json" }));
+      document.head.appendChild(link);
+    }
+
+    init();
+  </script>
+</body>
+</html>
