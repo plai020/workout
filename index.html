@@ -3,408 +3,90 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <title>運動生活整合日曆 V2.6</title>
-  <meta name="theme-color" content="#0f172a" />
+  <meta name="theme-color" content="#f3f6fb" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="運動日曆 V3" />
+  <title>運動生活整合日曆 V3.0</title>
   <style>
-    :root {
-      --bg: #f4f7fb;
-      --panel: #ffffff;
-      --text: #0f172a;
-      --muted: #64748b;
-      --line: #dbe4f1;
-      --accent: #2563eb;
-      --safe-bottom: calc(env(safe-area-inset-bottom) + 14px);
-      --safe-top: calc(env(safe-area-inset-top) + 12px);
-      --run: #ef4444;
-      --walk: #f59e0b;
-      --hike: #2563eb;
-      --lift: #7c3aed;
-      --timer-dark: #13213d;
-    }
-
-    * { box-sizing: border-box; }
-
-    body {
-      margin: 0;
-      font-family: "Segoe UI", "Noto Sans TC", system-ui, -apple-system, sans-serif;
-      background: var(--bg);
-      color: var(--text);
-      min-height: 100vh;
-    }
-
-    button, input, select, textarea {
-      font: inherit;
-      color: inherit;
-    }
-
-    .app {
-      max-width: 860px;
-      margin: 0 auto;
-      padding: var(--safe-top) 10px calc(var(--safe-bottom) + 76px);
-    }
-
-    .calendar {
-      background: var(--panel);
-      border: 1px solid var(--line);
-      border-radius: 18px;
-      box-shadow: 0 12px 28px rgba(15, 23, 42, 0.08);
-      padding: 10px;
-    }
-
-    .month-bar {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 8px;
-      margin-bottom: 8px;
-    }
-
-    .month-label {
-      font-size: 1.04rem;
-      font-weight: 700;
-    }
-
-    .icon-btn {
-      width: 34px;
-      height: 34px;
-      border-radius: 10px;
-      border: 1px solid var(--line);
-      background: #f8fbff;
-      cursor: pointer;
-    }
-
-    .calendar-grid {
-      display: grid;
-      grid-template-columns: repeat(7, minmax(0, 1fr));
-      gap: 6px;
-    }
-
-    .dow {
-      text-align: center;
-      color: var(--muted);
-      font-size: 0.78rem;
-      padding: 2px 0;
-    }
-
-    .day {
-      border: 1px solid var(--line);
-      border-radius: 12px;
-      min-height: 86px;
-      padding: 5px;
-      cursor: pointer;
-      display: flex;
-      flex-direction: column;
-      gap: 4px;
-      overflow: hidden;
-      background: #fdfefe;
-      transition: transform .16s, border-color .2s;
-    }
-
-    .day:hover {
-      transform: translateY(-1px);
-      border-color: #abc4ff;
-    }
-
-    .day.outside { opacity: 0.4; }
-    .day.today { border: 2px solid var(--accent); padding: 4px; }
-
-    .day-head {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      font-size: 0.78rem;
-      font-weight: 700;
-    }
-
-    .merged {
-      display: grid;
-      gap: 2px;
-      overflow: hidden;
-      max-height: 54px;
-      font-size: 0.66rem;
-    }
-
-    .merged-item {
-      color: #fff;
-      border-radius: 999px;
-      padding: 1px 6px;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
-
-    .run { background: var(--run); }
-    .walk { background: var(--walk); }
-    .hike { background: var(--hike); }
-    .lift { background: var(--lift); }
-
-    .fab {
-      position: fixed;
-      right: 16px;
-      bottom: calc(var(--safe-bottom) + 2px);
-      width: 58px;
-      height: 58px;
-      border-radius: 50%;
-      border: none;
-      background: var(--accent);
-      color: #fff;
-      font-size: 2rem;
-      line-height: 1;
-      box-shadow: 0 16px 30px rgba(37, 99, 235, 0.35);
-      cursor: pointer;
-      z-index: 50;
-    }
-
-    .scrim {
-      position: fixed;
-      inset: 0;
-      background: rgba(2, 6, 23, 0.55);
-      opacity: 0;
-      pointer-events: none;
-      transition: opacity .2s;
-      z-index: 20;
-    }
-
-    .scrim.show {
-      opacity: 1;
-      pointer-events: auto;
-    }
-
-    .sheet {
-      position: fixed;
-      left: 0;
-      right: 0;
-      bottom: 0;
-      max-height: 80vh;
-      background: var(--panel);
-      border-top-left-radius: 20px;
-      border-top-right-radius: 20px;
-      border: 1px solid var(--line);
-      transform: translateY(110%);
-      transition: transform .25s;
-      z-index: 30;
-      overflow: auto;
-      padding: 14px;
-    }
-
-    .sheet.show { transform: translateY(0); }
-
-    .row {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      gap: 8px;
-      margin-bottom: 10px;
-    }
-
-    .cards {
-      display: grid;
-      gap: 8px;
-    }
-
-    .card {
-      border: 1px solid var(--line);
-      border-radius: 12px;
-      padding: 10px;
-      background: #fbfdff;
-      display: grid;
-      gap: 4px;
-    }
-
-    .meta {
-      color: var(--muted);
-      font-size: 0.82rem;
-    }
-
-    .btn {
-      border: 1px solid var(--line);
-      background: #f7f9fd;
-      border-radius: 10px;
-      padding: 8px 10px;
-      cursor: pointer;
-    }
-
-    .btn.primary {
-      background: var(--accent);
-      border-color: var(--accent);
-      color: #fff;
-    }
-
-    .btn.danger {
-      background: #dc2626;
-      border-color: #dc2626;
-      color: #fff;
-    }
-
-    .cover {
-      position: fixed;
-      inset: 0;
-      background: #f5f8fe;
-      z-index: 40;
-      display: none;
-      overflow: auto;
-    }
-
-    .cover.show { display: block; }
-
-    .cover-inner {
-      max-width: 860px;
-      margin: 0 auto;
-      padding: var(--safe-top) 12px calc(var(--safe-bottom) + 12px);
-      display: grid;
-      gap: 10px;
-    }
-
-    .tabs {
-      display: flex;
-      gap: 6px;
-      flex-wrap: wrap;
-    }
-
-    .tab {
-      border: 1px solid var(--line);
-      background: #f3f7ff;
-      border-radius: 999px;
-      padding: 6px 12px;
-      cursor: pointer;
-    }
-
-    .tab.active {
-      background: #dce9ff;
-      border-color: #b7d0ff;
-      font-weight: 700;
-    }
-
-    .panel {
-      background: var(--panel);
-      border: 1px solid var(--line);
-      border-radius: 14px;
-      padding: 12px;
-      display: grid;
-      gap: 10px;
-    }
-
-    .hidden { display: none !important; }
-
-    .field {
-      display: grid;
-      gap: 4px;
-    }
-
-    .field > label {
-      color: var(--muted);
-      font-size: 0.86rem;
-    }
-
-    input, select, textarea {
-      border: 1px solid var(--line);
-      border-radius: 10px;
-      padding: 8px;
-      background: #fff;
-      width: 100%;
-    }
-
-    textarea { min-height: 72px; resize: vertical; }
-
-    .grid-2 {
-      display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 8px;
-    }
-
-    .grid-3 {
-      display: grid;
-      grid-template-columns: repeat(3, minmax(0, 1fr));
-      gap: 8px;
-    }
-
-    .gym-list {
-      display: grid;
-      gap: 8px;
-      max-height: 250px;
-      overflow: auto;
-    }
-
-    .gym-item {
-      border: 1px solid var(--line);
-      border-radius: 10px;
-      padding: 8px;
-      background: #fbfdff;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      gap: 8px;
-    }
-
-    .timer-btn {
-      border: 1px solid #23395f;
-      background: var(--timer-dark);
-      color: #fff;
-      border-radius: 10px;
-      padding: 10px;
-      cursor: pointer;
-    }
-
-    .timer-modal {
-      position: fixed;
-      inset: 0;
-      z-index: 60;
-      display: none;
-      align-items: center;
-      justify-content: center;
-      background: rgba(5, 8, 18, 0.75);
-      padding: 16px;
-    }
-
-    .timer-modal.show { display: flex; }
-
-    .timer-box {
-      width: min(520px, 100%);
-      background: #111d35;
-      border: 1px solid #29436f;
-      border-radius: 16px;
-      padding: 16px;
-      color: #f5f9ff;
-      display: grid;
-      gap: 10px;
-    }
-
-    .timer-value {
-      text-align: center;
-      font-size: clamp(2.8rem, 13vw, 5.2rem);
-      font-weight: 800;
-      letter-spacing: 0.04em;
-    }
-
-    .timer-grid {
-      display: grid;
-      grid-template-columns: repeat(4, minmax(0, 1fr));
-      gap: 8px;
-    }
-
-    .breathing-alert {
-      animation: breathe 1.1s ease-in-out 5;
-    }
-
-    @keyframes breathe {
-      0% { box-shadow: 0 0 0 0 rgba(250, 173, 173, 0.08); background: rgba(250, 173, 173, 0.06); }
-      50% { box-shadow: 0 0 0 14px rgba(250, 173, 173, 0.2); background: rgba(250, 173, 173, 0.32); }
-      100% { box-shadow: 0 0 0 0 rgba(250, 173, 173, 0.08); background: rgba(250, 173, 173, 0.06); }
-    }
-
-    @media (max-width: 700px) {
-      .grid-3 { grid-template-columns: 1fr; }
-      .grid-2 { grid-template-columns: 1fr; }
-      .day { min-height: 74px; }
-      .timer-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-    }
+    :root { --bg:#f3f6fb; --panel:#fff; --line:#dbe4f2; --text:#0f172a; --muted:#64748b; --accent:#2563eb; --run:#fee2e2; --walk:#fef3c7; --hike:#dbeafe; --lift:#ede9fe; --run-dot:#ef4444; --walk-dot:#f59e0b; --hike-dot:#3b82f6; --lift-dot:#8b5cf6; --tab-bg:#fff; --shadow:0 10px 24px rgba(15,23,42,.1); }
+    body.theme-dark { --bg:#0b1020; --panel:#151d31; --line:#24314d; --text:#edf2ff; --muted:#9fb0d1; --accent:#60a5fa; --run:#422028; --walk:#483822; --hike:#1d2e49; --lift:#2c244a; --tab-bg:#11182a; --shadow:0 10px 24px rgba(0,0,0,.35); }
+    * { box-sizing:border-box; }
+    body { margin:0; background:var(--bg); color:var(--text); font-family:"Segoe UI","Noto Sans TC",system-ui,-apple-system,sans-serif; min-height:100vh; }
+    button,input,select,textarea { font:inherit; color:inherit; }
+    .app { max-width:920px; margin:0 auto; padding:calc(env(safe-area-inset-top) + 10px) 10px calc(env(safe-area-inset-bottom) + 84px); }
+    .top-bar { display:flex; justify-content:space-between; align-items:center; gap:8px; margin-bottom:8px; }
+    .title { font-size:1rem; font-weight:700; }
+    .toggle-btn { border:1px solid var(--line); background:var(--panel); border-radius:10px; padding:7px 10px; cursor:pointer; }
+    .calendar { background:var(--panel); border:1px solid var(--line); border-radius:16px; box-shadow:var(--shadow); padding:10px; }
+    .month-row { display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; }
+    .icon-btn { width:34px; height:34px; border-radius:10px; border:1px solid var(--line); background:transparent; cursor:pointer; }
+    .month-label { font-weight:700; }
+    .calendar-grid { display:grid; grid-template-columns:repeat(7,minmax(0,1fr)); gap:6px; }
+    .dow { text-align:center; color:var(--muted); font-size:.78rem; padding:2px 0; }
+    .day { border:1px solid var(--line); border-radius:12px; min-height:78px; background:#fff; cursor:pointer; padding:5px; display:flex; flex-direction:column; gap:4px; overflow:hidden; position:relative; }
+    body.theme-dark .day { background:#182138; }
+    .day.outside { opacity:.4; }
+    .day.today { border:2px solid var(--accent); padding:4px; }
+    .day-num { font-size:.8rem; font-weight:700; }
+    .count-badge { position:absolute; top:4px; right:4px; min-width:18px; height:18px; border-radius:999px; border:1px solid var(--line); background:var(--panel); font-size:.68rem; display:inline-flex; align-items:center; justify-content:center; padding:0 4px; font-weight:700; }
+    .dots { display:flex; flex-wrap:wrap; gap:3px; max-height:34px; overflow:hidden; }
+    .dot { width:8px; height:8px; border-radius:2px; display:inline-block; }
+    .dot.run{background:var(--run-dot);} .dot.walk{background:var(--walk-dot);} .dot.hike{background:var(--hike-dot);} .dot.lift{background:var(--lift-dot);}
+    .scrim { position:fixed; inset:0; background:rgba(2,6,23,.55); opacity:0; pointer-events:none; transition:opacity .2s; z-index:30; }
+    .scrim.show { opacity:1; pointer-events:auto; }
+    .sheet { position:fixed; left:0; right:0; bottom:0; max-height:80vh; background:var(--panel); border-top-left-radius:18px; border-top-right-radius:18px; border:1px solid var(--line); transform:translateY(110%); transition:transform .25s; overflow:auto; z-index:40; padding:12px; }
+    .sheet.show { transform:translateY(0); }
+    .row { display:flex; justify-content:space-between; align-items:center; gap:8px; }
+    .cards { display:grid; gap:8px; margin-top:8px; }
+    .card { border:1px solid var(--line); border-radius:12px; padding:10px; display:grid; gap:4px; }
+    .card.run{background:var(--run);} .card.walk{background:var(--walk);} .card.hike{background:var(--hike);} .card.lift{background:var(--lift);}
+    .meta { font-size:.82rem; color:var(--muted); }
+    .btn { border:1px solid var(--line); border-radius:10px; background:var(--panel); padding:8px 10px; cursor:pointer; }
+    .btn.primary { background:var(--accent); border-color:var(--accent); color:#fff; }
+    .btn.danger { background:#dc2626; border-color:#dc2626; color:#fff; }
+    .cover { position:fixed; inset:0; background:var(--bg); z-index:45; display:none; overflow:auto; }
+    .cover.show { display:block; }
+    .cover-inner { max-width:920px; margin:0 auto; padding:calc(env(safe-area-inset-top) + 10px) 10px calc(env(safe-area-inset-bottom) + 90px); display:grid; gap:10px; }
+    .panel { border:1px solid var(--line); border-radius:14px; background:var(--panel); padding:10px; display:grid; gap:8px; }
+    .panel.type-run { background:color-mix(in oklab,var(--run) 60%,var(--panel)); }
+    .panel.type-walk { background:color-mix(in oklab,var(--walk) 60%,var(--panel)); }
+    .panel.type-hike { background:color-mix(in oklab,var(--hike) 60%,var(--panel)); }
+    .panel.type-lift { background:color-mix(in oklab,var(--lift) 60%,var(--panel)); }
+    .type-grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:8px; }
+    .type-btn { border:1px solid var(--line); border-radius:12px; background:var(--panel); min-height:64px; display:grid; place-items:center; gap:2px; cursor:pointer; font-weight:700; }
+    .type-btn.active { border:2px solid var(--accent); }
+    .field { display:grid; gap:4px; }
+    .field > label { font-size:.84rem; color:var(--muted); }
+    input,select,textarea { width:100%; border:1px solid var(--line); border-radius:10px; background:#fff; padding:8px; }
+    body.theme-dark input,body.theme-dark select,body.theme-dark textarea { background:#1a243d; }
+    textarea { min-height:70px; resize:vertical; }
+    .grid-2 { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; }
+    .grid-3 { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:8px; }
+    .hidden { display:none !important; }
+    .list { display:grid; gap:8px; max-height:280px; overflow:auto; }
+    .list-item { border:1px solid var(--line); border-radius:10px; background:var(--panel); padding:8px; display:flex; justify-content:space-between; align-items:center; gap:8px; }
+    .chart { height:220px; border:1px solid var(--line); border-radius:12px; padding:8px; display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); align-items:end; gap:8px; background:var(--panel); }
+    .bar-col { display:grid; gap:4px; justify-items:center; }
+    .bar { width:100%; border-radius:8px 8px 4px 4px; min-height:6px; background:linear-gradient(180deg,#60a5fa,#2563eb); }
+    .bar-label { font-size:.72rem; color:var(--muted); }
+    .bar-val { font-size:.72rem; font-weight:700; }
+    .tabbar { position:fixed; left:0; right:0; bottom:0; z-index:70; border-top:1px solid var(--line); background:var(--tab-bg); padding:8px 8px calc(env(safe-area-inset-bottom) + 8px); display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:8px; }
+    .tab-btn { border:1px solid var(--line); border-radius:10px; background:transparent; cursor:pointer; display:grid; justify-items:center; gap:2px; padding:6px 2px; font-size:.74rem; }
+    .tab-btn .icon { font-size:1.15rem; line-height:1; }
+    @media (max-width:720px){ .grid-3{grid-template-columns:1fr;} .grid-2{grid-template-columns:1fr;} .type-grid{grid-template-columns:repeat(2,minmax(0,1fr));} .day{min-height:70px;} }
   </style>
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 </head>
 <body>
   <main class="app">
+    <div class="top-bar">
+      <div class="title">運動生活整合日曆 V3.0</div>
+      <button id="themeBtn" class="toggle-btn" type="button">切換深色</button>
+    </div>
     <section class="calendar">
-      <div class="month-bar">
+      <div class="month-row">
         <button id="prevMonthBtn" class="icon-btn" type="button">◀</button>
         <div id="monthLabel" class="month-label"></div>
         <button id="nextMonthBtn" class="icon-btn" type="button">▶</button>
@@ -412,987 +94,208 @@
       <div id="calendarGrid" class="calendar-grid"></div>
     </section>
   </main>
-
-  <button id="fabBtn" class="fab" type="button" aria-label="新增運動">＋</button>
   <div id="scrim" class="scrim"></div>
-
   <section id="daySheet" class="sheet">
-    <div class="row">
-      <strong id="sheetTitle">當日運動</strong>
-      <button id="closeSheetBtn" class="btn" type="button">關閉</button>
-    </div>
-    <div id="sheetCards" class="cards"></div>
+    <div class="row"><strong id="sheetTitle">當日紀錄</strong><button id="closeSheetBtn" class="btn" type="button">關閉</button></div>
+    <div id="dayCards" class="cards"></div>
   </section>
-
-  <section id="appCover" class="cover">
+  <section id="cover" class="cover">
     <div class="cover-inner">
-      <div class="row">
-        <strong>運動生活整合日曆 V2.6</strong>
-        <button id="closeCoverBtn" class="btn" type="button">關閉</button>
-      </div>
-
-      <div class="tabs">
-        <button class="tab active" data-tab="entry" type="button">新增運動</button>
-        <button class="tab" data-tab="gym" type="button">Gym 管理</button>
-        <button class="tab" data-tab="analytics" type="button">統計中心</button>
-        <button class="tab" data-tab="backup" type="button">備份匯入</button>
-      </div>
-
-      <section id="tab-entry" class="panel">
+      <div class="row"><strong id="coverTitle">新增</strong><button id="closeCoverBtn" class="btn" type="button">關閉</button></div>
+      <section id="entryPage" class="panel type-run">
+        <div class="type-grid">
+          <button class="type-btn active" data-type="run" type="button"><span>🏃</span><span>跑</span></button>
+          <button class="type-btn" data-type="walk" type="button"><span>🚶</span><span>走</span></button>
+          <button class="type-btn" data-type="hike" type="button"><span>⛰️</span><span>山</span></button>
+          <button class="type-btn" data-type="lift" type="button"><span>🏋️</span><span>重</span></button>
+        </div>
         <form id="entryForm" class="grid-2">
-          <div class="field">
-            <label for="recordDate">日期</label>
-            <input id="recordDate" type="date" required />
+          <div class="field"><label for="recordDate">日期</label><input id="recordDate" type="date" required /></div>
+          <div class="field"><label for="titleInput">標題</label><input id="titleInput" required maxlength="48" /></div>
+          <div class="field"><label for="noteInput">備註</label><textarea id="noteInput"></textarea></div>
+          <div id="ocrBlock" class="field">
+            <label for="ocrInput">OCR 截圖辨識</label><input id="ocrInput" type="file" accept="image/*" />
+            <button id="ocrBtn" class="btn" type="button">辨識數字</button><div id="ocrStatus" class="meta">只抓數字，圖片不保存。</div>
           </div>
-          <div class="field">
-            <label for="type">運動類型</label>
-            <select id="type" required>
-              <option value="run">跑步</option>
-              <option value="walk">散步</option>
-              <option value="hike">登山</option>
-              <option value="lift">重訓</option>
-            </select>
-          </div>
-          <div class="field">
-            <label for="title">標題</label>
-            <input id="title" maxlength="48" required />
-          </div>
-          <div class="field">
-            <label for="content">備註</label>
-            <textarea id="content"></textarea>
-          </div>
-
-          <div id="ocrArea" class="field">
-            <label for="ocrInput">上傳截圖辨識</label>
-            <input id="ocrInput" type="file" accept="image/*" />
-            <button id="ocrBtn" class="btn" type="button">開始 OCR 辨識</button>
-            <div id="ocrStatus" class="meta">僅提取數字，不儲存圖片。</div>
-          </div>
-
           <div id="outdoorFields" class="grid-3">
-            <div class="field"><label for="distance">距離 (km)</label><input id="distance" type="number" min="0" step="0.1" /></div>
-            <div class="field"><label for="duration">時間 (分鐘)</label><input id="duration" type="number" min="0" step="1" /></div>
-            <div class="field"><label for="steps">步數</label><input id="steps" type="number" min="0" step="1" /></div>
-            <div class="field"><label for="elevationUp">爬升 (m)</label><input id="elevationUp" type="number" min="0" step="1" /></div>
-            <div class="field"><label for="elevationDown">下降 (m)</label><input id="elevationDown" type="number" min="0" step="1" /></div>
+            <div class="field"><label for="distanceInput">距離 (km)</label><input id="distanceInput" type="number" min="0" step="0.01" /></div>
+            <div class="field"><label for="hoursInput">時間-小時</label><input id="hoursInput" type="number" min="0" step="1" /></div>
+            <div class="field"><label for="minutesInput">時間-分鐘</label><input id="minutesInput" type="number" min="0" max="59" step="1" /></div>
+            <div class="field"><label for="stepsInput">步數</label><input id="stepsInput" type="number" min="0" step="1" /></div>
+            <div class="field"><label for="elevUpInput">爬升 (m)</label><input id="elevUpInput" type="number" min="0" step="1" /></div>
+            <div class="field"><label for="elevDownInput">下降 (m)</label><input id="elevDownInput" type="number" min="0" step="1" /></div>
           </div>
-
           <div id="liftFields" class="grid-3 hidden">
-            <div class="field"><label for="bodyPart">部位</label><select id="bodyPart"></select></div>
-            <div class="field"><label for="exercise">動作</label><select id="exercise"></select></div>
-            <div class="field"><label for="weight">重量 (kg)</label><input id="weight" type="number" min="0" step="0.5" /></div>
-            <div class="field"><label for="sets">組數</label><input id="sets" type="number" min="0" step="1" /></div>
-            <div class="field"><label for="reps">次數</label><input id="reps" type="number" min="0" step="1" /></div>
-            <div class="field">
-              <label for="restSec">休息秒數</label>
-              <div style="display:flex; gap:8px;">
-                <input id="restSec" type="number" min="1" step="1" value="90" />
-                <button id="openTimerBtn" class="btn" type="button">⏱</button>
-              </div>
-            </div>
+            <div class="field"><label for="partSelect">部位</label><select id="partSelect"></select></div>
+            <div class="field"><label for="exerciseSelect">動作</label><select id="exerciseSelect"></select></div>
+            <div class="field"><label for="weightInput">重量 (kg)</label><input id="weightInput" type="number" min="0" step="0.5" /></div>
+            <div class="field"><label for="setsInput">組數</label><input id="setsInput" type="number" min="0" step="1" /></div>
+            <div class="field"><label for="repsInput">次數</label><input id="repsInput" type="number" min="0" step="1" /></div>
+            <div class="field"><label for="secondsInput">秒數</label><input id="secondsInput" type="number" min="0" step="1" /></div>
           </div>
-
-          <div style="display:flex; gap:8px; flex-wrap:wrap;">
-            <button class="btn primary" type="submit">儲存紀錄</button>
-            <button id="resetEntryBtn" class="btn" type="button">清空</button>
-          </div>
+          <div style="display:flex; gap:8px; flex-wrap:wrap;"><button class="btn primary" type="submit">儲存</button><button id="resetFormBtn" class="btn" type="button">清空</button></div>
         </form>
       </section>
-
-      <section id="tab-gym" class="panel hidden">
+      <section id="managePage" class="panel hidden">
         <div class="grid-2">
-          <div class="field">
-            <label for="gymPartSelect">部位</label>
-            <select id="gymPartSelect"></select>
-          </div>
-          <div class="field">
-            <label for="newPart">新增 / 編輯部位</label>
-            <div style="display:flex; gap:8px;">
-              <input id="newPart" placeholder="輸入部位名稱" />
-              <button id="savePartBtn" class="btn" type="button">儲存</button>
-              <button id="deletePartBtn" class="btn danger" type="button">刪除</button>
-            </div>
-          </div>
+          <div class="field"><label for="managePartSelect">部位</label><select id="managePartSelect"></select></div>
+          <div class="field"><label for="newPartInput">新增部位</label><div style="display:flex; gap:8px;"><input id="newPartInput" /><button id="addPartBtn" class="btn" type="button">新增</button><button id="deletePartBtn" class="btn danger" type="button">刪除</button></div></div>
         </div>
-        <div class="field">
-          <label for="newExercise">新增動作</label>
-          <div style="display:flex; gap:8px;">
-            <input id="newExercise" placeholder="例如：槓鈴划船" />
-            <button id="addExerciseBtn" class="btn" type="button">新增</button>
-          </div>
-        </div>
-        <div id="exerciseList" class="gym-list"></div>
+        <div class="field"><label for="newExerciseInput">新增動作</label><div style="display:flex; gap:8px;"><input id="newExerciseInput" /><button id="addExerciseBtn" class="btn" type="button">新增</button></div></div>
+        <div id="exerciseList" class="list"></div>
       </section>
-
-      <section id="tab-analytics" class="panel hidden">
+      <section id="statsPage" class="panel hidden">
         <div class="grid-2">
-          <div class="field">
-            <label for="analyticsRange">報表區間</label>
-            <select id="analyticsRange">
-              <option value="day">日報</option>
-              <option value="month">月報</option>
-              <option value="quarter">季報</option>
-              <option value="year">年報</option>
-            </select>
-          </div>
-          <div class="field">
-            <label>&nbsp;</label>
-            <button id="refreshAnalyticsBtn" class="btn" type="button">刷新統計</button>
-          </div>
+          <div class="field"><label for="periodSelect">期間</label><select id="periodSelect"><option value="day">日</option><option value="month">月</option><option value="quarter">季</option><option value="year">年</option></select></div>
+          <div class="field"><label>&nbsp;</label><button id="updateChartBtn" class="btn">更新圖表</button></div>
         </div>
-        <div id="analyticsCards" class="cards"></div>
+        <div id="statsSummary" class="meta"></div>
+        <div id="chart" class="chart"></div>
       </section>
-
-      <section id="tab-backup" class="panel hidden">
-        <div style="display:flex; gap:8px; flex-wrap:wrap;">
-          <button id="exportBtn" class="btn" type="button">匯出備份 JSON</button>
-          <button id="importBtn" class="btn" type="button">匯入資料 JSON</button>
-          <input id="importFile" class="hidden" type="file" accept="application/json" />
-        </div>
-        <div class="meta">只儲存純文字與數值欄位，不保存圖片。</div>
+      <section id="backupPage" class="panel hidden">
+        <div style="display:flex; gap:8px; flex-wrap:wrap;"><button id="exportBtn" class="btn" type="button">匯出備份</button><button id="importBtn" class="btn" type="button">匯入備份</button><input id="importFile" class="hidden" type="file" accept="application/json" /></div>
+        <div class="meta">LocalStorage 純文字/數值資料備份。</div>
       </section>
     </div>
   </section>
-
-  <section id="timerModal" class="timer-modal">
-    <div id="timerBox" class="timer-box">
-      <div class="row">
-        <strong>休息計時器</strong>
-        <button id="closeTimerBtn" class="timer-btn" type="button">關閉</button>
-      </div>
-      <div id="timerValue" class="timer-value">01:30</div>
-      <div class="timer-grid">
-        <button class="timer-btn quick-time" data-sec="30" type="button">30s</button>
-        <button class="timer-btn quick-time" data-sec="60" type="button">60s</button>
-        <button class="timer-btn quick-time" data-sec="90" type="button">90s</button>
-        <button class="timer-btn quick-time" data-sec="120" type="button">120s</button>
-      </div>
-      <div class="timer-grid">
-        <button id="startTimerBtn" class="timer-btn" type="button">開始</button>
-        <button id="stopTimerBtn" class="timer-btn" type="button">停止</button>
-      </div>
-    </div>
-  </section>
-
+  <nav class="tabbar">
+    <button class="tab-btn" data-page="entry" type="button"><span class="icon">＋</span><span>新增</span></button>
+    <button class="tab-btn" data-page="manage" type="button"><span class="icon">⚙️</span><span>管理</span></button>
+    <button class="tab-btn" data-page="stats" type="button"><span class="icon">📊</span><span>統計</span></button>
+    <button class="tab-btn" data-page="backup" type="button"><span class="icon">💾</span><span>備份</span></button>
+  </nav>
   <script>
-    const STORAGE_KEY = "workout_calendar_v26_records";
-    const GYM_KEY = "workout_calendar_v26_gym_library";
-    const DAY_NAMES = ["日", "一", "二", "三", "四", "五", "六"];
-
-    const DEFAULT_GYM = {
-      胸: ["臥推", "上斜啞鈴推", "飛鳥"],
-      背: ["引體向上", "划船", "硬舉"],
-      腿: ["深蹲", "腿推", "弓箭步"],
-      肩: ["肩推", "側平舉", "面拉"]
-    };
-
-    const state = {
-      cursorDate: new Date(),
-      selectedDateKey: toDateKey(new Date()),
-      editRecordId: null,
-      records: loadRecords(),
-      gym: loadGymLibrary(),
-      timerLeft: 90,
-      timerId: null
-    };
-
+    const STORAGE_KEY = "workout_v30_records";
+    const GYM_KEY = "workout_v30_gym";
+    const THEME_KEY = "workout_v30_theme";
+    const DAY_NAMES = ["日","一","二","三","四","五","六"];
+    const DEFAULT_GYM = { 胸:["臥推"], 背:["划船"], 腿:["深蹲"] };
+    const state = { cursorDate:new Date(), selectedDateKey:toDateKey(new Date()), selectedType:"run", editId:null, records:loadJson(STORAGE_KEY,{}), gym:loadJson(GYM_KEY,structuredClone(DEFAULT_GYM)) };
     const els = {
-      monthLabel: document.getElementById("monthLabel"),
-      calendarGrid: document.getElementById("calendarGrid"),
-      prevMonthBtn: document.getElementById("prevMonthBtn"),
-      nextMonthBtn: document.getElementById("nextMonthBtn"),
-      fabBtn: document.getElementById("fabBtn"),
-      scrim: document.getElementById("scrim"),
-      daySheet: document.getElementById("daySheet"),
-      sheetTitle: document.getElementById("sheetTitle"),
-      sheetCards: document.getElementById("sheetCards"),
-      closeSheetBtn: document.getElementById("closeSheetBtn"),
-      appCover: document.getElementById("appCover"),
-      closeCoverBtn: document.getElementById("closeCoverBtn"),
-      tabs: [...document.querySelectorAll(".tab")],
-      entryForm: document.getElementById("entryForm"),
-      recordDate: document.getElementById("recordDate"),
-      type: document.getElementById("type"),
-      title: document.getElementById("title"),
-      content: document.getElementById("content"),
-      ocrArea: document.getElementById("ocrArea"),
-      ocrInput: document.getElementById("ocrInput"),
-      ocrBtn: document.getElementById("ocrBtn"),
-      ocrStatus: document.getElementById("ocrStatus"),
-      outdoorFields: document.getElementById("outdoorFields"),
-      distance: document.getElementById("distance"),
-      duration: document.getElementById("duration"),
-      steps: document.getElementById("steps"),
-      elevationUp: document.getElementById("elevationUp"),
-      elevationDown: document.getElementById("elevationDown"),
-      liftFields: document.getElementById("liftFields"),
-      bodyPart: document.getElementById("bodyPart"),
-      exercise: document.getElementById("exercise"),
-      weight: document.getElementById("weight"),
-      sets: document.getElementById("sets"),
-      reps: document.getElementById("reps"),
-      restSec: document.getElementById("restSec"),
-      openTimerBtn: document.getElementById("openTimerBtn"),
-      resetEntryBtn: document.getElementById("resetEntryBtn"),
-      gymPartSelect: document.getElementById("gymPartSelect"),
-      newPart: document.getElementById("newPart"),
-      savePartBtn: document.getElementById("savePartBtn"),
-      deletePartBtn: document.getElementById("deletePartBtn"),
-      newExercise: document.getElementById("newExercise"),
-      addExerciseBtn: document.getElementById("addExerciseBtn"),
-      exerciseList: document.getElementById("exerciseList"),
-      analyticsRange: document.getElementById("analyticsRange"),
-      refreshAnalyticsBtn: document.getElementById("refreshAnalyticsBtn"),
-      analyticsCards: document.getElementById("analyticsCards"),
-      exportBtn: document.getElementById("exportBtn"),
-      importBtn: document.getElementById("importBtn"),
-      importFile: document.getElementById("importFile"),
-      timerModal: document.getElementById("timerModal"),
-      timerBox: document.getElementById("timerBox"),
-      timerValue: document.getElementById("timerValue"),
-      closeTimerBtn: document.getElementById("closeTimerBtn"),
-      startTimerBtn: document.getElementById("startTimerBtn"),
-      stopTimerBtn: document.getElementById("stopTimerBtn"),
-      quickTimeBtns: [...document.querySelectorAll(".quick-time")]
+      themeBtn:document.getElementById("themeBtn"), prevMonthBtn:document.getElementById("prevMonthBtn"), nextMonthBtn:document.getElementById("nextMonthBtn"), monthLabel:document.getElementById("monthLabel"), calendarGrid:document.getElementById("calendarGrid"),
+      scrim:document.getElementById("scrim"), daySheet:document.getElementById("daySheet"), closeSheetBtn:document.getElementById("closeSheetBtn"), sheetTitle:document.getElementById("sheetTitle"), dayCards:document.getElementById("dayCards"),
+      cover:document.getElementById("cover"), closeCoverBtn:document.getElementById("closeCoverBtn"), coverTitle:document.getElementById("coverTitle"), typeBtns:[...document.querySelectorAll(".type-btn")], tabBtns:[...document.querySelectorAll(".tab-btn")],
+      entryPage:document.getElementById("entryPage"), managePage:document.getElementById("managePage"), statsPage:document.getElementById("statsPage"), backupPage:document.getElementById("backupPage"), entryForm:document.getElementById("entryForm"),
+      recordDate:document.getElementById("recordDate"), titleInput:document.getElementById("titleInput"), noteInput:document.getElementById("noteInput"), ocrBlock:document.getElementById("ocrBlock"), ocrInput:document.getElementById("ocrInput"),
+      ocrBtn:document.getElementById("ocrBtn"), ocrStatus:document.getElementById("ocrStatus"), outdoorFields:document.getElementById("outdoorFields"), distanceInput:document.getElementById("distanceInput"), hoursInput:document.getElementById("hoursInput"),
+      minutesInput:document.getElementById("minutesInput"), stepsInput:document.getElementById("stepsInput"), elevUpInput:document.getElementById("elevUpInput"), elevDownInput:document.getElementById("elevDownInput"), liftFields:document.getElementById("liftFields"),
+      partSelect:document.getElementById("partSelect"), exerciseSelect:document.getElementById("exerciseSelect"), weightInput:document.getElementById("weightInput"), setsInput:document.getElementById("setsInput"), repsInput:document.getElementById("repsInput"),
+      secondsInput:document.getElementById("secondsInput"), resetFormBtn:document.getElementById("resetFormBtn"), managePartSelect:document.getElementById("managePartSelect"), newPartInput:document.getElementById("newPartInput"), addPartBtn:document.getElementById("addPartBtn"),
+      deletePartBtn:document.getElementById("deletePartBtn"), newExerciseInput:document.getElementById("newExerciseInput"), addExerciseBtn:document.getElementById("addExerciseBtn"), exerciseList:document.getElementById("exerciseList"), periodSelect:document.getElementById("periodSelect"),
+      updateChartBtn:document.getElementById("updateChartBtn"), statsSummary:document.getElementById("statsSummary"), chart:document.getElementById("chart"), exportBtn:document.getElementById("exportBtn"), importBtn:document.getElementById("importBtn"), importFile:document.getElementById("importFile")
     };
-
-    function init() {
-      bindEvents();
-      els.recordDate.value = state.selectedDateKey;
-      renderGymSelectors();
-      syncTypeUI();
-      renderCalendar();
-      renderAnalytics();
-      updateTimerText();
+    function init(){ applyTheme(); bindEvents(); els.recordDate.value = state.selectedDateKey; renderGymSelectors(); syncTypePanel(); renderCalendar(); renderStats(); initManifest(); }
+    function bindEvents(){
+      els.themeBtn.addEventListener("click", toggleTheme);
+      els.prevMonthBtn.addEventListener("click",()=>{ state.cursorDate = new Date(state.cursorDate.getFullYear(),state.cursorDate.getMonth()-1,1); renderCalendar(); });
+      els.nextMonthBtn.addEventListener("click",()=>{ state.cursorDate = new Date(state.cursorDate.getFullYear(),state.cursorDate.getMonth()+1,1); renderCalendar(); });
+      els.scrim.addEventListener("click",()=>{ closeSheet(); closeCover(); }); els.closeSheetBtn.addEventListener("click", closeSheet); els.closeCoverBtn.addEventListener("click", closeCover);
+      els.tabBtns.forEach((btn)=>btn.addEventListener("click",()=>openCover(btn.dataset.page)));
+      els.typeBtns.forEach((btn)=>btn.addEventListener("click",()=>setType(btn.dataset.type)));
+      els.partSelect.addEventListener("change", fillExerciseOptions); els.exerciseSelect.addEventListener("change", autofillLastLift);
+      els.entryForm.addEventListener("submit", saveRecord); els.resetFormBtn.addEventListener("click", resetForm); els.ocrBtn.addEventListener("click", runOCR);
+      els.managePartSelect.addEventListener("change", renderExerciseList); els.addPartBtn.addEventListener("click", addPart); els.deletePartBtn.addEventListener("click", deletePart); els.addExerciseBtn.addEventListener("click", addExercise);
+      els.updateChartBtn.addEventListener("click", renderStats); els.periodSelect.addEventListener("change", renderStats);
+      els.exportBtn.addEventListener("click", exportBackup); els.importBtn.addEventListener("click",()=>els.importFile.click()); els.importFile.addEventListener("change", importBackup);
     }
-
-    function bindEvents() {
-      els.prevMonthBtn.addEventListener("click", () => {
-        state.cursorDate = new Date(state.cursorDate.getFullYear(), state.cursorDate.getMonth() - 1, 1);
-        renderCalendar();
-      });
-      els.nextMonthBtn.addEventListener("click", () => {
-        state.cursorDate = new Date(state.cursorDate.getFullYear(), state.cursorDate.getMonth() + 1, 1);
-        renderCalendar();
-      });
-
-      els.fabBtn.addEventListener("click", () => openCover("entry"));
-      els.closeCoverBtn.addEventListener("click", closeCover);
-      els.closeSheetBtn.addEventListener("click", closeDaySheet);
-      els.scrim.addEventListener("click", () => { closeDaySheet(); closeCover(); });
-
-      els.tabs.forEach((tab) => {
-        tab.addEventListener("click", () => activateTab(tab.dataset.tab));
-      });
-
-      els.type.addEventListener("change", syncTypeUI);
-      els.bodyPart.addEventListener("change", fillExerciseByPart);
-      els.exercise.addEventListener("change", autofillLiftMemory);
-      els.entryForm.addEventListener("submit", handleSaveRecord);
-      els.resetEntryBtn.addEventListener("click", resetEntryForm);
-
-      els.ocrBtn.addEventListener("click", runOCRFill);
-
-      els.savePartBtn.addEventListener("click", savePart);
-      els.deletePartBtn.addEventListener("click", deletePart);
-      els.addExerciseBtn.addEventListener("click", addExercise);
-      els.gymPartSelect.addEventListener("change", renderExerciseManager);
-
-      els.refreshAnalyticsBtn.addEventListener("click", renderAnalytics);
-      els.analyticsRange.addEventListener("change", renderAnalytics);
-
-      els.exportBtn.addEventListener("click", exportData);
-      els.importBtn.addEventListener("click", () => els.importFile.click());
-      els.importFile.addEventListener("change", importData);
-
-      els.openTimerBtn.addEventListener("click", openTimer);
-      els.closeTimerBtn.addEventListener("click", closeTimer);
-      els.startTimerBtn.addEventListener("click", () => startTimer(Number(els.restSec.value) || 90));
-      els.stopTimerBtn.addEventListener("click", stopTimer);
-      els.quickTimeBtns.forEach((btn) => {
-        btn.addEventListener("click", () => {
-          els.restSec.value = btn.dataset.sec;
-          state.timerLeft = Number(btn.dataset.sec);
-          updateTimerText();
-        });
-      });
-    }
-
-    function activateTab(tab) {
-      els.tabs.forEach((btn) => btn.classList.toggle("active", btn.dataset.tab === tab));
-      ["entry", "gym", "analytics", "backup"].forEach((id) => {
-        document.getElementById(`tab-${id}`).classList.toggle("hidden", id !== tab);
-      });
-      if (tab === "analytics") renderAnalytics();
-      if (tab === "gym") renderExerciseManager();
-    }
-
-    function openCover(tab) {
-      activateTab(tab);
-      els.scrim.classList.add("show");
-      els.appCover.classList.add("show");
-    }
-
-    function closeCover() {
-      els.appCover.classList.remove("show");
-      if (!els.daySheet.classList.contains("show")) els.scrim.classList.remove("show");
-    }
-
-    function openDaySheet(dateKey, dateObj) {
-      state.selectedDateKey = dateKey;
-      state.cursorDate = new Date(dateObj.getFullYear(), dateObj.getMonth(), 1);
-      els.recordDate.value = dateKey;
-      renderCalendar();
-      renderDayCards(dateKey);
-      els.scrim.classList.add("show");
-      els.daySheet.classList.add("show");
-    }
-
-    function closeDaySheet() {
-      els.daySheet.classList.remove("show");
-      if (!els.appCover.classList.contains("show")) els.scrim.classList.remove("show");
-    }
-
-    function syncTypeUI() {
-      const type = els.type.value;
-      const isLift = type === "lift";
-      const showOCR = type === "run" || type === "walk" || type === "hike";
-      els.liftFields.classList.toggle("hidden", !isLift);
-      els.outdoorFields.classList.toggle("hidden", isLift);
-      els.ocrArea.classList.toggle("hidden", !showOCR);
-      if (isLift) autofillLiftMemory();
-    }
-
-    function renderCalendar() {
-      const y = state.cursorDate.getFullYear();
-      const m = state.cursorDate.getMonth();
-      els.monthLabel.textContent = `${y} 年 ${m + 1} 月`;
-      els.calendarGrid.innerHTML = "";
-
-      DAY_NAMES.forEach((d) => {
-        const el = document.createElement("div");
-        el.className = "dow";
-        el.textContent = d;
-        els.calendarGrid.appendChild(el);
-      });
-
-      const first = new Date(y, m, 1);
-      const start = first.getDay();
-      const monthDays = new Date(y, m + 1, 0).getDate();
-      const prevMonthDays = new Date(y, m, 0).getDate();
-
-      for (let i = 0; i < 42; i += 1) {
-        const day = document.createElement("button");
-        day.type = "button";
-        day.className = "day";
-
-        let dateObj;
-        let dayNum;
-        if (i < start) {
-          dayNum = prevMonthDays - start + i + 1;
-          dateObj = new Date(y, m - 1, dayNum);
-          day.classList.add("outside");
-        } else if (i >= start + monthDays) {
-          dayNum = i - start - monthDays + 1;
-          dateObj = new Date(y, m + 1, dayNum);
-          day.classList.add("outside");
-        } else {
-          dayNum = i - start + 1;
-          dateObj = new Date(y, m, dayNum);
-        }
-
-        const key = toDateKey(dateObj);
-        const records = state.records[key] || [];
-        if (key === toDateKey(new Date())) day.classList.add("today");
-
-        const intensity = Math.min(0.45, getDayIntensity(records) * 0.06);
-        day.style.background = `rgba(37, 99, 235, ${0.04 + intensity})`;
-
-        const head = document.createElement("div");
-        head.className = "day-head";
-        head.innerHTML = `<span>${dayNum}</span><span>${records.length || ""}</span>`;
-
-        const mergedWrap = document.createElement("div");
-        mergedWrap.className = "merged";
-        const merged = mergeDayTypes(records);
-        merged.slice(0, 3).forEach((item) => {
-          const mEl = document.createElement("div");
-          mEl.className = `merged-item ${item.type}`;
-          mEl.textContent = item.label;
-          mergedWrap.appendChild(mEl);
-        });
-        if (merged.length > 3) {
-          const more = document.createElement("div");
-          more.className = "merged-item";
-          more.style.background = "#7f8ba2";
-          more.textContent = `+${merged.length - 3}`;
-          mergedWrap.appendChild(more);
-        }
-
-        day.appendChild(head);
-        day.appendChild(mergedWrap);
-        day.addEventListener("click", () => openDaySheet(key, dateObj));
-        els.calendarGrid.appendChild(day);
+    function applyTheme(){ const saved = localStorage.getItem(THEME_KEY); document.body.classList.toggle("theme-dark", saved === "dark"); els.themeBtn.textContent = saved === "dark" ? "切換淺色" : "切換深色"; }
+    function toggleTheme(){ const isDark = document.body.classList.toggle("theme-dark"); localStorage.setItem(THEME_KEY, isDark ? "dark" : "light"); applyTheme(); }
+    function openCover(page){ els.cover.classList.add("show"); els.scrim.classList.add("show"); const pages={entry:els.entryPage,manage:els.managePage,stats:els.statsPage,backup:els.backupPage}; Object.values(pages).forEach((p)=>p.classList.add("hidden")); pages[page].classList.remove("hidden"); els.coverTitle.textContent={entry:"新增",manage:"管理",stats:"統計",backup:"備份"}[page]; if(page==="manage") renderExerciseList(); if(page==="stats") renderStats(); }
+    function closeCover(){ els.cover.classList.remove("show"); if(!els.daySheet.classList.contains("show")) els.scrim.classList.remove("show"); }
+    function openSheet(dateKey,dateObj){ state.selectedDateKey=dateKey; state.cursorDate = new Date(dateObj.getFullYear(),dateObj.getMonth(),1); els.recordDate.value=dateKey; renderCalendar(); renderDayCards(dateKey); els.daySheet.classList.add("show"); els.scrim.classList.add("show"); }
+    function closeSheet(){ els.daySheet.classList.remove("show"); if(!els.cover.classList.contains("show")) els.scrim.classList.remove("show"); }
+    function renderCalendar(){
+      const y=state.cursorDate.getFullYear(); const m=state.cursorDate.getMonth(); els.monthLabel.textContent=`${y} 年 ${m+1} 月`; els.calendarGrid.innerHTML="";
+      DAY_NAMES.forEach((d)=>{ const el=document.createElement("div"); el.className="dow"; el.textContent=d; els.calendarGrid.appendChild(el); });
+      const first=new Date(y,m,1); const start=first.getDay(); const monthDays=new Date(y,m+1,0).getDate(); const prevDays=new Date(y,m,0).getDate();
+      for(let i=0;i<42;i+=1){
+        const cell=document.createElement("button"); cell.type="button"; cell.className="day"; let dateObj; let n;
+        if(i<start){ n=prevDays-start+i+1; dateObj=new Date(y,m-1,n); cell.classList.add("outside"); }
+        else if(i>=start+monthDays){ n=i-start-monthDays+1; dateObj=new Date(y,m+1,n); cell.classList.add("outside"); }
+        else { n=i-start+1; dateObj=new Date(y,m,n); }
+        const key=toDateKey(dateObj); const list=state.records[key]||[]; if(key===toDateKey(new Date())) cell.classList.add("today");
+        const numEl=document.createElement("div"); numEl.className="day-num"; numEl.textContent=String(n); cell.appendChild(numEl);
+        if(list.length){ const badge=document.createElement("span"); badge.className="count-badge"; badge.textContent=String(list.length); cell.appendChild(badge); }
+        const dots=document.createElement("div"); dots.className="dots"; list.slice(0,12).forEach((r)=>{ const d=document.createElement("span"); d.className=`dot ${r.type}`; dots.appendChild(d); }); cell.appendChild(dots);
+        cell.addEventListener("click",()=>openSheet(key,dateObj)); els.calendarGrid.appendChild(cell);
       }
     }
-
-    function mergeDayTypes(records) {
-      const run = records.filter((r) => r.type === "run");
-      const walk = records.filter((r) => r.type === "walk");
-      const hike = records.filter((r) => r.type === "hike");
-      const lift = records.filter((r) => r.type === "lift");
-      const out = [];
-      if (run.length) out.push({ type: "run", label: `跑步 x${run.length}` });
-      if (walk.length) out.push({ type: "walk", label: `散步 x${walk.length}` });
-      if (hike.length) out.push({ type: "hike", label: `登山 x${hike.length}` });
-      if (lift.length) {
-        const parts = [...new Set(lift.map((r) => r.bodyPart).filter(Boolean))];
-        out.push({ type: "lift", label: `重訓: ${parts.slice(0, 2).join("、") || "綜合"}` });
-      }
-      return out;
+    function renderDayCards(dateKey){
+      const [yy,mm,dd]=dateKey.split("-").map(Number); els.sheetTitle.textContent=`${yy}/${mm}/${dd} 紀錄`; const list=state.records[dateKey]||[];
+      if(!list.length){ els.dayCards.innerHTML=`<div class="card">當日尚無紀錄</div>`; return; }
+      els.dayCards.innerHTML=list.map((r)=>`<article class="card ${r.type}"><strong>${escapeHtml(r.title||"未命名")}</strong><div>${escapeHtml(r.note||"無備註")}</div><div class="meta">${escapeHtml(cardMeta(r))}</div><div style="display:flex; gap:8px;"><button class="btn" data-edit="${r.id}" type="button">編輯</button><button class="btn danger" data-del="${r.id}" type="button">刪除</button></div></article>`).join("");
+      els.dayCards.querySelectorAll("[data-edit]").forEach((b)=>b.addEventListener("click",()=>editRecord(b.dataset.edit)));
+      els.dayCards.querySelectorAll("[data-del]").forEach((b)=>b.addEventListener("click",()=>deleteRecord(b.dataset.del)));
     }
-
-    function getDayIntensity(records) {
-      let score = 0;
-      records.forEach((r) => {
-        if (r.type === "walk") score += Number(r.steps || 0) / 2500;
-        if (r.type === "run") score += Number(r.distance || 0) / 2 + Number(r.duration || 0) / 40;
-        if (r.type === "hike") score += Number(r.distance || 0) / 3 + Number(r.elevationUp || 0) / 400;
-        if (r.type === "lift") score += (Number(r.weight || 0) * Number(r.sets || 0) * Number(r.reps || 0)) / 4500;
-      });
-      return score;
+    function cardMeta(r){ if(r.type==="lift") return `部位 ${r.part||"-"} | 動作 ${r.exercise||"-"} | ${r.weight||0}kg ${r.sets||0}x${r.reps||0} | 秒數 ${r.seconds||0}`; return `距離 ${toFixed2(r.distance)} km | 時間 ${r.hours||0}h ${r.minutes||0}m | 步數 ${r.steps||0} | 爬升 ${r.elevUp||0}m`; }
+    function setType(type){ state.selectedType=type; els.typeBtns.forEach((b)=>b.classList.toggle("active",b.dataset.type===type)); syncTypePanel(); }
+    function syncTypePanel(){ const type=state.selectedType; els.entryPage.classList.remove("type-run","type-walk","type-hike","type-lift"); els.entryPage.classList.add(`type-${type}`); const isLift=type==="lift"; els.liftFields.classList.toggle("hidden",!isLift); els.outdoorFields.classList.toggle("hidden",isLift); els.ocrBlock.classList.toggle("hidden",isLift); if(isLift) autofillLastLift(); }
+    function saveRecord(event){
+      event.preventDefault(); const dateKey=els.recordDate.value; if(!dateKey) return alert("請選擇日期"); const title=els.titleInput.value.trim(); if(!title) return alert("請輸入標題");
+      const payload={ id:state.editId||crypto.randomUUID(), type:state.selectedType, title, note:els.noteInput.value.trim(), createdAt:Date.now() };
+      if(payload.type==="lift"){ payload.part=els.partSelect.value; payload.exercise=els.exerciseSelect.value; payload.weight=num(els.weightInput.value); payload.sets=num(els.setsInput.value); payload.reps=num(els.repsInput.value); payload.seconds=num(els.secondsInput.value); }
+      else { payload.distance=num(els.distanceInput.value,2); payload.hours=num(els.hoursInput.value); payload.minutes=num(els.minutesInput.value); payload.steps=num(els.stepsInput.value); payload.elevUp=num(els.elevUpInput.value); payload.elevDown=num(els.elevDownInput.value); }
+      if(!state.records[dateKey]) state.records[dateKey]=[]; if(state.editId) removeRecordFromAllDates(state.editId); state.records[dateKey].unshift(payload); persist(STORAGE_KEY,state.records); state.selectedDateKey=dateKey; resetForm(); renderCalendar(); renderStats(); closeCover(); openSheet(dateKey,fromDateKey(dateKey));
     }
-
-    function renderDayCards(dateKey) {
-      const [y, m, d] = dateKey.split("-").map(Number);
-      els.sheetTitle.textContent = `${y}/${m}/${d} 運動卡片`;
-      const records = state.records[dateKey] || [];
-      if (!records.length) {
-        els.sheetCards.innerHTML = `<div class="card">當日尚無紀錄</div>`;
-        return;
-      }
-      els.sheetCards.innerHTML = records.map((r) => {
-        const meta = recordMeta(r);
-        return `
-          <article class="card">
-            <strong>${escapeHtml(r.title || "未命名")} (${typeLabel(r.type)})</strong>
-            <div>${escapeHtml(r.content || "無備註")}</div>
-            <div class="meta">${meta || "—"}</div>
-            <div style="display:flex; gap:8px;">
-              <button class="btn" data-edit-id="${r.id}">編輯</button>
-              <button class="btn danger" data-delete-id="${r.id}">刪除</button>
-            </div>
-          </article>
-        `;
-      }).join("");
-
-      els.sheetCards.querySelectorAll("[data-edit-id]").forEach((btn) => {
-        btn.addEventListener("click", () => startEdit(btn.dataset.editId));
-      });
-      els.sheetCards.querySelectorAll("[data-delete-id]").forEach((btn) => {
-        btn.addEventListener("click", () => deleteRecord(btn.dataset.deleteId));
+    function editRecord(id){ const found=findRecord(id); if(!found) return; const {key,record}=found; state.editId=id; setType(record.type); openCover("entry"); els.recordDate.value=key; els.titleInput.value=record.title||""; els.noteInput.value=record.note||""; els.distanceInput.value=record.distance??""; els.hoursInput.value=record.hours??""; els.minutesInput.value=record.minutes??""; els.stepsInput.value=record.steps??""; els.elevUpInput.value=record.elevUp??""; els.elevDownInput.value=record.elevDown??""; els.partSelect.value=record.part||firstPart(); fillExerciseOptions(); els.exerciseSelect.value=record.exercise||firstExercise(els.partSelect.value); els.weightInput.value=record.weight??""; els.setsInput.value=record.sets??""; els.repsInput.value=record.reps??""; els.secondsInput.value=record.seconds??""; }
+    function deleteRecord(id){ if(!confirm("確定刪除？")) return; removeRecordFromAllDates(id); persist(STORAGE_KEY,state.records); renderCalendar(); renderDayCards(state.selectedDateKey); renderStats(); }
+    function removeRecordFromAllDates(id){ Object.keys(state.records).forEach((key)=>{ state.records[key]=state.records[key].filter((r)=>r.id!==id); }); }
+    function findRecord(id){ for(const [key,list] of Object.entries(state.records)){ const record=list.find((r)=>r.id===id); if(record) return {key,record}; } return null; }
+    function resetForm(){ state.editId=null; els.entryForm.reset(); els.recordDate.value=state.selectedDateKey; els.ocrInput.value=""; els.ocrStatus.textContent="只抓數字，圖片不保存。"; renderGymSelectors(); setType("run"); }
+    function renderGymSelectors(){ if(!Object.keys(state.gym).length) state.gym=structuredClone(DEFAULT_GYM); const options=Object.keys(state.gym).map((p)=>`<option value="${escapeHtml(p)}">${escapeHtml(p)}</option>`).join(""); els.partSelect.innerHTML=options; els.managePartSelect.innerHTML=options; fillExerciseOptions(); renderExerciseList(); }
+    function fillExerciseOptions(){ const part=els.partSelect.value||firstPart(); const list=state.gym[part]||[]; els.exerciseSelect.innerHTML=list.map((e)=>`<option value="${escapeHtml(e)}">${escapeHtml(e)}</option>`).join(""); autofillLastLift(); }
+    function firstPart(){ return Object.keys(state.gym)[0]||"綜合"; }
+    function firstExercise(part){ return (state.gym[part]||[])[0]||""; }
+    function addPart(){ const name=els.newPartInput.value.trim(); if(!name) return alert("請輸入部位"); if(!state.gym[name]) state.gym[name]=[]; els.newPartInput.value=""; persist(GYM_KEY,state.gym); renderGymSelectors(); }
+    function deletePart(){ const part=els.managePartSelect.value; if(!part) return; if(!confirm(`刪除部位 ${part} ?`)) return; delete state.gym[part]; if(!Object.keys(state.gym).length) state.gym=structuredClone(DEFAULT_GYM); persist(GYM_KEY,state.gym); renderGymSelectors(); }
+    function addExercise(){ const part=els.managePartSelect.value||firstPart(); const ex=els.newExerciseInput.value.trim(); if(!ex) return alert("請輸入動作"); if(!state.gym[part]) state.gym[part]=[]; state.gym[part].push(ex); els.newExerciseInput.value=""; persist(GYM_KEY,state.gym); renderGymSelectors(); }
+    function renderExerciseList(){
+      const part=els.managePartSelect.value||firstPart(); const list=state.gym[part]||[];
+      els.exerciseList.innerHTML=list.map((name,idx)=>`<div class="list-item"><span>${escapeHtml(name)}</span><div style="display:flex; gap:8px;"><button class="btn" data-e-edit="${idx}" type="button">編輯</button><button class="btn danger" data-e-del="${idx}" type="button">刪除</button></div></div>`).join("")||`<div class="list-item">此部位尚無動作</div>`;
+      els.exerciseList.querySelectorAll("[data-e-edit]").forEach((b)=>b.addEventListener("click",()=>{ const i=Number(b.dataset.eEdit); const next=prompt("編輯動作",list[i]); if(!next) return; list[i]=next.trim(); persist(GYM_KEY,state.gym); renderGymSelectors(); }));
+      els.exerciseList.querySelectorAll("[data-e-del]").forEach((b)=>b.addEventListener("click",()=>{ const i=Number(b.dataset.eDel); list.splice(i,1); persist(GYM_KEY,state.gym); renderGymSelectors(); }));
+    }
+    function autofillLastLift(){ if(state.selectedType!=="lift") return; const ex=(els.exerciseSelect.value||"").trim(); if(!ex) return; const all=Object.values(state.records).flat(); const last=all.filter((r)=>r.type==="lift"&&(r.exercise||"").trim()===ex).sort((a,b)=>Number(b.createdAt||0)-Number(a.createdAt||0))[0]; if(!last) return; if(last.weight!=null) els.weightInput.value=last.weight; if(last.sets!=null) els.setsInput.value=last.sets; if(last.reps!=null) els.repsInput.value=last.reps; if(last.seconds!=null) els.secondsInput.value=last.seconds; if(last.part) els.partSelect.value=last.part; }
+    async function runOCR(){
+      const file=els.ocrInput.files?.[0]; if(!file) return alert("請先上傳截圖"); if(!window.Tesseract) return alert("OCR 載入失敗");
+      els.ocrBtn.disabled=true; els.ocrStatus.textContent="OCR 辨識中...";
+      try{ const processed=await preprocessImage(file); const result=await Tesseract.recognize(processed,"eng"); const n=extractNumericMetrics(result.data.text||""); if(n.distance!=null) els.distanceInput.value=n.distance.toFixed(2); if(n.hours!=null) els.hoursInput.value=n.hours; if(n.minutes!=null) els.minutesInput.value=n.minutes; if(n.steps!=null) els.stepsInput.value=n.steps; if(n.elevUp!=null) els.elevUpInput.value=n.elevUp; if(n.elevDown!=null) els.elevDownInput.value=n.elevDown; els.ocrStatus.textContent="辨識完成，可手動修正。"; }
+      catch(err){ els.ocrStatus.textContent=`辨識失敗：${err.message}`; }
+      finally{ els.ocrInput.value=""; els.ocrBtn.disabled=false; }
+    }
+    function preprocessImage(file){
+      return new Promise((resolve,reject)=>{
+        const img=new Image(); const fr=new FileReader(); fr.onload=()=>{ img.src=String(fr.result); }; fr.onerror=()=>reject(new Error("讀圖失敗"));
+        img.onload=()=>{ const canvas=document.createElement("canvas"); canvas.width=img.width; canvas.height=img.height; const ctx=canvas.getContext("2d"); ctx.drawImage(img,0,0); const data=ctx.getImageData(0,0,canvas.width,canvas.height); for(let i=0;i<data.data.length;i+=4){ const gray=data.data[i]*.299+data.data[i+1]*.587+data.data[i+2]*.114; const v=gray>145?255:0; data.data[i]=v; data.data[i+1]=v; data.data[i+2]=v; } ctx.putImageData(data,0,0); canvas.toBlob((blob)=>{ if(!blob) return reject(new Error("預處理失敗")); resolve(blob); },"image/png"); };
+        img.onerror=()=>reject(new Error("載入圖片失敗")); fr.readAsDataURL(file);
       });
     }
-
-    function recordMeta(r) {
-      if (r.type === "lift") {
-        const volume = Number(r.weight || 0) * Number(r.sets || 0) * Number(r.reps || 0);
-        return [`部位 ${r.bodyPart || "-"}`, `動作 ${r.exercise || "-"}`, `重量 ${r.weight || 0}kg`, `組數 ${r.sets || 0}`, `次數 ${r.reps || 0}`, `負荷 ${volume}`].join(" | ");
-      }
-      return [
-        `距離 ${r.distance || 0}km`,
-        `時間 ${r.duration || 0} 分`,
-        `步數 ${r.steps || 0}`,
-        `爬升 ${r.elevationUp || 0}m`,
-        `下降 ${r.elevationDown || 0}m`
-      ].join(" | ");
+    function extractNumericMetrics(text){
+      const t=text.replace(/,/g," "); const get=(re)=>{ const m=t.match(re); return m?Number(m[1]):null; };
+      const distance=get(/(\d+(?:\.\d{1,2})?)\s*km/i)??get(/distance[:\s]+(\d+(?:\.\d{1,2})?)/i); const steps=get(/steps?[:\s]+(\d+)/i); const elevUp=get(/(?:gain|ascent|elev(?:ation)?)[\s:]+(\d+)/i); const elevDown=get(/(?:descent|down)[\s:]+(\d+)/i);
+      let hours=null; let minutes=null; const hm=t.match(/(\d{1,2})\s*h(?:ours?)?\s*(\d{1,2})\s*m/i); if(hm){ hours=Number(hm[1]); minutes=Number(hm[2]); } else { const onlyMin=get(/(\d{1,3})\s*min/i)??get(/time[:\s]+(\d{1,3})/i); if(onlyMin!=null){ hours=Math.floor(onlyMin/60); minutes=onlyMin%60; } }
+      return { distance,hours,minutes,steps,elevUp,elevDown };
     }
-
-    function handleSaveRecord(event) {
-      event.preventDefault();
-      const dateKey = els.recordDate.value;
-      if (!dateKey) return alert("請選擇日期");
-      const title = els.title.value.trim();
-      if (!title) return alert("請輸入標題");
-
-      const type = els.type.value;
-      const payload = {
-        id: state.editRecordId || crypto.randomUUID(),
-        type,
-        title,
-        content: els.content.value.trim(),
-        createdAt: Date.now()
-      };
-
-      if (type === "lift") {
-        payload.bodyPart = els.bodyPart.value;
-        payload.exercise = els.exercise.value;
-        payload.weight = normalizeNumber(els.weight.value);
-        payload.sets = normalizeNumber(els.sets.value);
-        payload.reps = normalizeNumber(els.reps.value);
-      } else {
-        payload.distance = normalizeNumber(els.distance.value);
-        payload.duration = normalizeNumber(els.duration.value);
-        payload.steps = normalizeNumber(els.steps.value);
-        payload.elevationUp = normalizeNumber(els.elevationUp.value);
-        payload.elevationDown = normalizeNumber(els.elevationDown.value);
-      }
-
-      if (!state.records[dateKey]) state.records[dateKey] = [];
-      if (state.editRecordId) {
-        replaceRecord(state.editRecordId, payload, dateKey);
-      } else {
-        state.records[dateKey].unshift(payload);
-      }
-
-      persistRecords();
-      state.selectedDateKey = dateKey;
-      renderCalendar();
-      renderDayCards(dateKey);
-      renderAnalytics();
-      resetEntryForm();
-      closeCover();
-      openDaySheet(dateKey, fromDateKey(dateKey));
+    function renderStats(){
+      const range=els.periodSelect.value; const list=collectByRange(range);
+      const metrics={ 步數:list.reduce((a,r)=>a+Number(r.steps||0),0), 距離:list.reduce((a,r)=>a+Number(r.distance||0),0), 爬升:list.reduce((a,r)=>a+Number(r.elevUp||0),0), 負荷:list.reduce((a,r)=>a+Number(r.weight||0)*Number(r.sets||0)*Number(r.reps||0),0) };
+      const max=Math.max(...Object.values(metrics),1); els.statsSummary.textContent=`筆數：${list.length}，期間：${rangeLabel(range)}`;
+      els.chart.innerHTML=Object.entries(metrics).map(([k,v])=>{ const h=Math.max(6,(v/max)*180); return `<div class="bar-col"><div class="bar" style="height:${h}px"></div><div class="bar-val">${pretty(v,k)}</div><div class="bar-label">${k}</div></div>`; }).join("");
     }
-
-    function replaceRecord(recordId, payload, targetDateKey) {
-      Object.keys(state.records).forEach((key) => {
-        state.records[key] = state.records[key].filter((r) => r.id !== recordId);
-      });
-      if (!state.records[targetDateKey]) state.records[targetDateKey] = [];
-      state.records[targetDateKey].unshift(payload);
-    }
-
-    function deleteRecord(recordId) {
-      if (!confirm("確定刪除這筆紀錄？")) return;
-      Object.keys(state.records).forEach((key) => {
-        state.records[key] = state.records[key].filter((r) => r.id !== recordId);
-      });
-      persistRecords();
-      renderCalendar();
-      renderDayCards(state.selectedDateKey);
-      renderAnalytics();
-    }
-
-    function startEdit(recordId) {
-      const { record, dateKey } = findRecordById(recordId);
-      if (!record) return;
-      state.editRecordId = recordId;
-      openCover("entry");
-      els.recordDate.value = dateKey;
-      els.type.value = record.type;
-      syncTypeUI();
-      els.title.value = record.title || "";
-      els.content.value = record.content || "";
-      els.distance.value = record.distance ?? "";
-      els.duration.value = record.duration ?? "";
-      els.steps.value = record.steps ?? "";
-      els.elevationUp.value = record.elevationUp ?? "";
-      els.elevationDown.value = record.elevationDown ?? "";
-      els.bodyPart.value = record.bodyPart || firstPart();
-      fillExerciseByPart();
-      els.exercise.value = record.exercise || firstExercise(els.bodyPart.value);
-      els.weight.value = record.weight ?? "";
-      els.sets.value = record.sets ?? "";
-      els.reps.value = record.reps ?? "";
-    }
-
-    function findRecordById(recordId) {
-      for (const [key, list] of Object.entries(state.records)) {
-        const found = list.find((r) => r.id === recordId);
-        if (found) return { record: found, dateKey: key };
-      }
-      return { record: null, dateKey: null };
-    }
-
-    function resetEntryForm() {
-      state.editRecordId = null;
-      els.entryForm.reset();
-      els.recordDate.value = state.selectedDateKey;
-      els.ocrInput.value = "";
-      els.ocrStatus.textContent = "僅提取數字，不儲存圖片。";
-      renderGymSelectors();
-      syncTypeUI();
-    }
-
-    function renderGymSelectors() {
-      const parts = Object.keys(state.gym);
-      if (!parts.length) state.gym = { 綜合: ["自重訓練"] };
-      const partOptions = Object.keys(state.gym).map((part) => `<option value="${escapeHtml(part)}">${escapeHtml(part)}</option>`).join("");
-      els.bodyPart.innerHTML = partOptions;
-      els.gymPartSelect.innerHTML = partOptions;
-      fillExerciseByPart();
-      renderExerciseManager();
-    }
-
-    function fillExerciseByPart() {
-      const part = els.bodyPart.value || firstPart();
-      const list = state.gym[part] || [];
-      els.exercise.innerHTML = list.map((item) => `<option value="${escapeHtml(item)}">${escapeHtml(item)}</option>`).join("");
-      autofillLiftMemory();
-    }
-
-    function firstPart() {
-      return Object.keys(state.gym)[0] || "綜合";
-    }
-
-    function firstExercise(part) {
-      return (state.gym[part] || [])[0] || "";
-    }
-
-    function savePart() {
-      const oldPart = els.gymPartSelect.value;
-      const newPart = els.newPart.value.trim();
-      if (!newPart) return alert("請輸入部位名稱");
-      if (oldPart && oldPart !== newPart && state.gym[oldPart]) {
-        state.gym[newPart] = state.gym[oldPart];
-        delete state.gym[oldPart];
-      } else if (!state.gym[newPart]) {
-        state.gym[newPart] = [];
-      }
-      persistGym();
-      els.newPart.value = "";
-      renderGymSelectors();
-    }
-
-    function deletePart() {
-      const part = els.gymPartSelect.value;
-      if (!part) return;
-      if (!confirm(`刪除部位 ${part} 以及其動作？`)) return;
-      delete state.gym[part];
-      if (!Object.keys(state.gym).length) state.gym = { 綜合: ["自重訓練"] };
-      persistGym();
-      renderGymSelectors();
-    }
-
-    function addExercise() {
-      const part = els.gymPartSelect.value || firstPart();
-      const name = els.newExercise.value.trim();
-      if (!name) return alert("請輸入動作名稱");
-      if (!state.gym[part]) state.gym[part] = [];
-      if (!state.gym[part].includes(name)) state.gym[part].push(name);
-      els.newExercise.value = "";
-      persistGym();
-      renderGymSelectors();
-    }
-
-    function renderExerciseManager() {
-      const part = els.gymPartSelect.value || firstPart();
-      els.newPart.value = part;
-      const list = state.gym[part] || [];
-      els.exerciseList.innerHTML = list.map((name, idx) => `
-        <div class="gym-item">
-          <span>${escapeHtml(name)}</span>
-          <div style="display:flex; gap:8px;">
-            <button class="btn" data-ex-edit="${idx}">編輯</button>
-            <button class="btn danger" data-ex-del="${idx}">刪除</button>
-          </div>
-        </div>
-      `).join("") || `<div class="gym-item">此部位尚無動作</div>`;
-
-      els.exerciseList.querySelectorAll("[data-ex-edit]").forEach((btn) => {
-        btn.addEventListener("click", () => {
-          const i = Number(btn.dataset.exEdit);
-          const next = prompt("編輯動作名稱", state.gym[part][i]);
-          if (!next) return;
-          state.gym[part][i] = next.trim();
-          persistGym();
-          renderGymSelectors();
-        });
-      });
-      els.exerciseList.querySelectorAll("[data-ex-del]").forEach((btn) => {
-        btn.addEventListener("click", () => {
-          const i = Number(btn.dataset.exDel);
-          state.gym[part].splice(i, 1);
-          persistGym();
-          renderGymSelectors();
-        });
-      });
-    }
-
-    function autofillLiftMemory() {
-      if (els.type.value !== "lift") return;
-      const exercise = (els.exercise.value || "").trim();
-      if (!exercise) return;
-      const all = Object.values(state.records).flat();
-      const last = all
-        .filter((r) => r.type === "lift" && (r.exercise || "").trim() === exercise)
-        .sort((a, b) => Number(b.createdAt || 0) - Number(a.createdAt || 0))[0];
-      if (!last) return;
-      if (last.weight != null) els.weight.value = last.weight;
-      if (last.sets != null) els.sets.value = last.sets;
-      if (last.reps != null) els.reps.value = last.reps;
-      if (last.bodyPart) els.bodyPart.value = last.bodyPart;
-    }
-
-    async function runOCRFill() {
-      const file = els.ocrInput.files?.[0];
-      if (!file) return alert("請先選擇截圖");
-      if (!window.Tesseract) return alert("OCR 載入失敗，請確認網路");
-
-      els.ocrBtn.disabled = true;
-      els.ocrStatus.textContent = "正在辨識中...";
-
-      try {
-        const result = await Tesseract.recognize(file, "eng");
-        const text = result.data.text || "";
-        const parsed = parseWorkoutText(text);
-        fillOCRParsed(parsed);
-        els.ocrStatus.textContent = "辨識完成，可手動校對修改。";
-      } catch (err) {
-        els.ocrStatus.textContent = `辨識失敗：${err.message}`;
-      } finally {
-        els.ocrInput.value = "";
-        els.ocrBtn.disabled = false;
-      }
-    }
-
-    function parseWorkoutText(text) {
-      const normalized = text.replace(/,/g, "");
-      const get = (re) => {
-        const m = normalized.match(re);
-        return m ? Number(m[1]) : null;
-      };
-      return {
-        distance: get(/(?:distance|dist|km)\s*[:=]?\s*(\d+(?:\.\d+)?)/i) ?? get(/(\d+(?:\.\d+)?)\s*km/i),
-        duration: get(/(?:time|duration|min)\s*[:=]?\s*(\d+(?:\.\d+)?)/i) ?? null,
-        steps: get(/(?:steps?|step)\s*[:=]?\s*(\d+)/i),
-        elevationUp: get(/(?:elev(?:ation)?(?:\s*gain)?|ascent|climb)\s*[:=]?\s*(\d+(?:\.\d+)?)/i),
-        elevationDown: get(/(?:descent|down)\s*[:=]?\s*(\d+(?:\.\d+)?)/i)
-      };
-    }
-
-    function fillOCRParsed(parsed) {
-      if (parsed.distance != null) els.distance.value = parsed.distance;
-      if (parsed.duration != null) els.duration.value = parsed.duration;
-      if (parsed.steps != null) els.steps.value = parsed.steps;
-      if (parsed.elevationUp != null) els.elevationUp.value = parsed.elevationUp;
-      if (parsed.elevationDown != null) els.elevationDown.value = parsed.elevationDown;
-    }
-
-    function openTimer() {
-      state.timerLeft = Number(els.restSec.value) || 90;
-      updateTimerText();
-      els.timerModal.classList.add("show");
-    }
-
-    function closeTimer() {
-      els.timerModal.classList.remove("show");
-    }
-
-    function startTimer(sec) {
-      stopTimer();
-      state.timerLeft = Math.max(1, Math.floor(sec));
-      updateTimerText();
-      state.timerId = setInterval(() => {
-        state.timerLeft -= 1;
-        updateTimerText();
-        if (state.timerLeft <= 0) {
-          stopTimer();
-          triggerTimerAlert();
-        }
-      }, 1000);
-    }
-
-    function stopTimer() {
-      if (state.timerId) {
-        clearInterval(state.timerId);
-        state.timerId = null;
-      }
-    }
-
-    function updateTimerText() {
-      els.timerValue.textContent = formatTime(state.timerLeft);
-    }
-
-    function triggerTimerAlert() {
-      els.timerBox.classList.add("breathing-alert");
-      beepSoft();
-      setTimeout(() => els.timerBox.classList.remove("breathing-alert"), 5600);
-    }
-
-    function beepSoft() {
-      try {
-        const ctx = new (window.AudioContext || window.webkitAudioContext)();
-        const now = ctx.currentTime;
-        [0, 0.4, 0.8].forEach((off) => {
-          const osc = ctx.createOscillator();
-          const gain = ctx.createGain();
-          osc.type = "sine";
-          osc.frequency.value = 740;
-          osc.connect(gain);
-          gain.connect(ctx.destination);
-          gain.gain.setValueAtTime(0.001, now + off);
-          gain.gain.exponentialRampToValueAtTime(0.15, now + off + 0.04);
-          gain.gain.exponentialRampToValueAtTime(0.001, now + off + 0.26);
-          osc.start(now + off);
-          osc.stop(now + off + 0.28);
-        });
-      } catch {
-        alert("休息時間結束");
-      }
-    }
-
-    function renderAnalytics() {
-      const range = els.analyticsRange.value;
-      const rows = collectRangeRecords(range);
-      const stats = {
-        steps: 0,
-        runDist: 0,
-        hikeDist: 0,
-        elevation: 0,
-        liftVolume: 0
-      };
-      rows.forEach((r) => {
-        if (r.type === "walk") stats.steps += Number(r.steps || 0);
-        if (r.type === "run") {
-          stats.runDist += Number(r.distance || 0);
-          stats.elevation += Number(r.elevationUp || 0);
-        }
-        if (r.type === "hike") {
-          stats.hikeDist += Number(r.distance || 0);
-          stats.elevation += Number(r.elevationUp || 0);
-        }
-        if (r.type === "lift") {
-          stats.liftVolume += Number(r.weight || 0) * Number(r.sets || 0) * Number(r.reps || 0);
-        }
-      });
-
-      els.analyticsCards.innerHTML = `
-        <div class="card"><strong>散步總步數</strong><div>${formatNum(stats.steps)} 步</div></div>
-        <div class="card"><strong>跑步總距離</strong><div>${stats.runDist.toFixed(2)} km</div></div>
-        <div class="card"><strong>登山總距離</strong><div>${stats.hikeDist.toFixed(2)} km</div></div>
-        <div class="card"><strong>總爬升</strong><div>${formatNum(stats.elevation)} m</div></div>
-        <div class="card"><strong>重訓總負荷量</strong><div>${formatNum(stats.liftVolume)}</div></div>
-      `;
-    }
-
-    function collectRangeRecords(range) {
-      const now = new Date();
-      const all = Object.entries(state.records);
-      return all
-        .filter(([key]) => inRange(fromDateKey(key), range, now))
-        .flatMap(([, list]) => list);
-    }
-
-    function inRange(date, range, now) {
-      if (range === "day") {
-        return toDateKey(date) === toDateKey(now);
-      }
-      if (range === "month") {
-        return date.getFullYear() === now.getFullYear() && date.getMonth() === now.getMonth();
-      }
-      if (range === "quarter") {
-        const q = Math.floor(now.getMonth() / 3);
-        return date.getFullYear() === now.getFullYear() && Math.floor(date.getMonth() / 3) === q;
-      }
-      return date.getFullYear() === now.getFullYear();
-    }
-
-    function exportData() {
-      const payload = { records: state.records, gym: state.gym };
-      const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `workout-v26-backup-${toDateKey(new Date())}.json`;
-      a.click();
-      URL.revokeObjectURL(url);
-    }
-
-    async function importData(event) {
-      const file = event.target.files?.[0];
-      if (!file) return;
-      try {
-        const text = await file.text();
-        const parsed = JSON.parse(text);
-        if (!parsed || typeof parsed !== "object") throw new Error("格式錯誤");
-        state.records = parsed.records && typeof parsed.records === "object" ? parsed.records : {};
-        state.gym = parsed.gym && typeof parsed.gym === "object" ? parsed.gym : DEFAULT_GYM;
-        persistRecords();
-        persistGym();
-        renderGymSelectors();
-        renderCalendar();
-        renderAnalytics();
-        alert("匯入成功");
-      } catch (err) {
-        alert(`匯入失敗：${err.message}`);
-      } finally {
-        event.target.value = "";
-      }
-    }
-
-    function persistRecords() {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(state.records));
-    }
-
-    function loadRecords() {
-      try {
-        const raw = localStorage.getItem(STORAGE_KEY);
-        const parsed = raw ? JSON.parse(raw) : {};
-        return parsed && typeof parsed === "object" ? parsed : {};
-      } catch {
-        return {};
-      }
-    }
-
-    function persistGym() {
-      localStorage.setItem(GYM_KEY, JSON.stringify(state.gym));
-    }
-
-    function loadGymLibrary() {
-      try {
-        const raw = localStorage.getItem(GYM_KEY);
-        const parsed = raw ? JSON.parse(raw) : null;
-        if (!parsed || typeof parsed !== "object") return structuredClone(DEFAULT_GYM);
-        return parsed;
-      } catch {
-        return structuredClone(DEFAULT_GYM);
-      }
-    }
-
-    function toDateKey(date) {
-      const y = date.getFullYear();
-      const m = String(date.getMonth() + 1).padStart(2, "0");
-      const d = String(date.getDate()).padStart(2, "0");
-      return `${y}-${m}-${d}`;
-    }
-
-    function fromDateKey(key) {
-      const [y, m, d] = key.split("-").map(Number);
-      return new Date(y, m - 1, d);
-    }
-
-    function formatTime(sec) {
-      const s = Math.max(0, Number(sec || 0));
-      const m = Math.floor(s / 60);
-      const ss = s % 60;
-      return `${String(m).padStart(2, "0")}:${String(ss).padStart(2, "0")}`;
-    }
-
-    function normalizeNumber(v) {
-      if (v === "" || v == null) return null;
-      const n = Number(v);
-      return Number.isFinite(n) ? n : null;
-    }
-
-    function formatNum(v) {
-      return Number(v || 0).toLocaleString("zh-Hant");
-    }
-
-    function typeLabel(type) {
-      return { run: "跑步", walk: "散步", hike: "登山", lift: "重訓" }[type] || type;
-    }
-
-    function escapeHtml(value) {
-      return String(value)
-        .replaceAll("&", "&amp;")
-        .replaceAll("<", "&lt;")
-        .replaceAll(">", "&gt;")
-        .replaceAll('"', "&quot;")
-        .replaceAll("'", "&#39;");
-    }
-
+    function collectByRange(range){ const now=new Date(); return Object.entries(state.records).filter(([k])=>inRange(fromDateKey(k),now,range)).flatMap(([,list])=>list); }
+    function inRange(d,now,range){ if(range==="day") return toDateKey(d)===toDateKey(now); if(range==="month") return d.getFullYear()===now.getFullYear()&&d.getMonth()===now.getMonth(); if(range==="quarter") return d.getFullYear()===now.getFullYear()&&Math.floor(d.getMonth()/3)===Math.floor(now.getMonth()/3); return d.getFullYear()===now.getFullYear(); }
+    function rangeLabel(range){ return {day:"日",month:"月",quarter:"季",year:"年"}[range]; }
+    function pretty(v,key){ if(key==="距離") return `${Number(v).toFixed(2)}km`; if(key==="爬升") return `${Number(v).toFixed(0)}m`; return Number(v).toLocaleString("zh-Hant"); }
+    function exportBackup(){ const payload={records:state.records,gym:state.gym}; const blob=new Blob([JSON.stringify(payload,null,2)],{type:"application/json"}); const url=URL.createObjectURL(blob); const a=document.createElement("a"); a.href=url; a.download=`workout-v30-${toDateKey(new Date())}.json`; a.click(); URL.revokeObjectURL(url); }
+    async function importBackup(e){ const file=e.target.files?.[0]; if(!file) return; try{ const text=await file.text(); const parsed=JSON.parse(text); if(!parsed||typeof parsed!=="object") throw new Error("格式錯誤"); state.records=parsed.records&&typeof parsed.records==="object"?parsed.records:{}; state.gym=parsed.gym&&typeof parsed.gym==="object"?parsed.gym:structuredClone(DEFAULT_GYM); persist(STORAGE_KEY,state.records); persist(GYM_KEY,state.gym); renderGymSelectors(); renderCalendar(); renderStats(); alert("匯入完成"); } catch(err){ alert(`匯入失敗：${err.message}`); } finally{ e.target.value=""; } }
+    function initManifest(){ const manifest={ name:"運動生活整合日曆 V3.0", short_name:"運動日曆V3", display:"standalone", start_url:".", background_color:"#0f172a", theme_color:"#0f172a", icons:[{ src:"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'%3E%3Crect width='192' height='192' rx='40' fill='%230f172a'/%3E%3Ccircle cx='96' cy='96' r='52' fill='%233b82f6'/%3E%3Cpath d='M66 96h60M96 66v60' stroke='white' stroke-width='12' stroke-linecap='round'/%3E%3C/svg%3E", sizes:"192x192", type:"image/svg+xml" }] }; const link=document.createElement("link"); link.rel="manifest"; link.href=URL.createObjectURL(new Blob([JSON.stringify(manifest)],{type:"application/json"})); document.head.appendChild(link); }
+    function persist(key,data){ localStorage.setItem(key,JSON.stringify(data)); }
+    function loadJson(key,fallback){ try{ const raw=localStorage.getItem(key); const parsed=raw?JSON.parse(raw):fallback; return parsed&&typeof parsed==="object"?parsed:fallback; } catch { return fallback; } }
+    function toDateKey(d){ const y=d.getFullYear(); const m=String(d.getMonth()+1).padStart(2,"0"); const day=String(d.getDate()).padStart(2,"0"); return `${y}-${m}-${day}`; }
+    function fromDateKey(key){ const [y,m,d]=key.split("-").map(Number); return new Date(y,m-1,d); }
+    function num(v,fixed=null){ if(v===""||v==null) return null; const n=Number(v); if(!Number.isFinite(n)) return null; return fixed==null?n:Number(n.toFixed(fixed)); }
+    function toFixed2(v){ if(v==null||Number.isNaN(Number(v))) return "0.00"; return Number(v).toFixed(2); }
+    function escapeHtml(s){ return String(s).replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;").replaceAll('"',"&quot;").replaceAll("'","&#39;"); }
     init();
   </script>
 </body>
