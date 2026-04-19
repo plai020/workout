@@ -1,574 +1,127 @@
 <!DOCTYPE html>
-<html lang="zh-Hant">
+<html lang="zh-TW">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <meta name="theme-color" content="#f3f6fb" />
-  <meta name="apple-mobile-web-app-capable" content="yes" />
-  <meta name="mobile-web-app-capable" content="yes" />
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-  <meta name="apple-mobile-web-app-title" content="運動日曆 V3" />
-  <title>運動生活整合日曆 V3.1</title>
-  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
-  <style>
-    :root {
-      --run: #FF5252;
-      --walk: #FFD740;
-      --hike: #448AFF;
-      --lift: #B388FF;
-      --bg: #f3f6fb;
-      --panel: #ffffff;
-      --line: #d8e2f0;
-      --text: #0f172a;
-      --muted: #64748b;
-      --tab-bg: #ffffff;
-      --accent: #2563eb;
-      --shadow: 0 10px 24px rgba(15, 23, 42, 0.1);
-    }
-
-    body.theme-dark {
-      --bg: #0a1020;
-      --panel: #131d33;
-      --line: #293a5a;
-      --text: #ffffff;
-      --muted: #b6c4e0;
-      --tab-bg: #111a2b;
-      --accent: #70b0ff;
-      --shadow: 0 12px 28px rgba(0, 0, 0, 0.35);
-    }
-
-    * { box-sizing: border-box; }
-    body {
-      margin: 0;
-      background: var(--bg);
-      color: var(--text);
-      font-family: "Segoe UI", "Noto Sans TC", system-ui, -apple-system, sans-serif;
-      min-height: 100vh;
-    }
-    button, input, select, textarea { font: inherit; color: inherit; }
-
-    .app {
-      max-width: 960px;
-      margin: 0 auto;
-      padding: calc(env(safe-area-inset-top) + 10px) 10px calc(env(safe-area-inset-bottom) + 92px);
-    }
-
-    .topbar {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 8px;
-      gap: 8px;
-    }
-    .title { font-weight: 700; font-size: 1.04rem; }
-    .theme-btn {
-      border: 1px solid var(--line);
-      border-radius: 999px;
-      padding: 8px 12px;
-      background: var(--panel);
-      cursor: pointer;
-    }
-
-    .calendar {
-      background: var(--panel);
-      border: 1px solid var(--line);
-      border-radius: 18px;
-      box-shadow: var(--shadow);
-      padding: 10px;
-    }
-    .month-row {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 8px;
-    }
-    .icon-btn {
-      width: 36px;
-      height: 36px;
-      border-radius: 12px;
-      border: 1px solid var(--line);
-      background: transparent;
-      cursor: pointer;
-    }
-    .month-label { font-weight: 700; }
-    .calendar-grid {
-      display: grid;
-      grid-template-columns: repeat(7, minmax(0, 1fr));
-      gap: 6px;
-    }
-    .dow {
-      text-align: center;
-      color: var(--muted);
-      font-size: 0.78rem;
-      padding: 2px 0;
-    }
-    .day {
-      position: relative;
-      border: 1px solid var(--line);
-      border-radius: 13px;
-      min-height: 80px;
-      padding: 5px;
-      cursor: pointer;
-      overflow: hidden;
-      display: grid;
-      gap: 4px;
-      align-content: start;
-      background: rgba(255, 255, 255, 0.95);
-    }
-    body.theme-dark .day { background: rgba(26, 36, 61, 0.95); }
-    .day.outside { opacity: 0.42; }
-    .day.today { border: 2px solid var(--accent); padding: 4px; }
-    .day-num { font-size: 0.8rem; font-weight: 700; }
-    .count {
-      position: absolute;
-      top: 4px;
-      right: 4px;
-      min-width: 19px;
-      height: 19px;
-      border-radius: 999px;
-      border: 1px solid var(--line);
-      background: var(--panel);
-      font-size: 0.68rem;
-      font-weight: 700;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      padding: 0 4px;
-    }
-    .dots {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 3px;
-      max-height: 34px;
-      overflow: hidden;
-    }
-    .dot {
-      width: 8px;
-      height: 8px;
-      border-radius: 2px;
-    }
-    .dot.run { background: var(--run); }
-    .dot.walk { background: var(--walk); }
-    .dot.hike { background: var(--hike); }
-    .dot.lift { background: var(--lift); }
-
-    .scrim {
-      position: fixed;
-      inset: 0;
-      background: rgba(2, 6, 23, 0.55);
-      opacity: 0;
-      pointer-events: none;
-      transition: opacity 0.2s;
-      z-index: 30;
-    }
-    .scrim.show { opacity: 1; pointer-events: auto; }
-
-    .sheet {
-      position: fixed;
-      left: 0;
-      right: 0;
-      bottom: 0;
-      max-height: 80vh;
-      background: var(--panel);
-      border-top-left-radius: 20px;
-      border-top-right-radius: 20px;
-      border: 1px solid var(--line);
-      transform: translateY(110%);
-      transition: transform 0.25s;
-      z-index: 40;
-      padding: 12px;
-      overflow-y: auto;
-      -webkit-overflow-scrolling: touch;
-    }
-    .sheet.show { transform: translateY(0); }
-
-    .row { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
-    .cards { display: grid; gap: 8px; margin-top: 8px; }
-    .card {
-      border: 1px solid var(--line);
-      border-radius: 14px;
-      padding: 10px;
-      display: grid;
-      gap: 4px;
-    }
-    .card.run { background: color-mix(in oklab, var(--run) 26%, white); }
-    .card.walk { background: color-mix(in oklab, var(--walk) 38%, white); }
-    .card.hike { background: color-mix(in oklab, var(--hike) 26%, white); }
-    .card.lift { background: color-mix(in oklab, var(--lift) 30%, white); }
-    body.theme-dark .card {
-      color: #fff;
-      border-color: rgba(255, 255, 255, 0.15);
-    }
-    body.theme-dark .card.run { background: color-mix(in oklab, var(--run) 32%, #1a1f2f); }
-    body.theme-dark .card.walk { background: color-mix(in oklab, var(--walk) 32%, #1a1f2f); }
-    body.theme-dark .card.hike { background: color-mix(in oklab, var(--hike) 32%, #1a1f2f); }
-    body.theme-dark .card.lift { background: color-mix(in oklab, var(--lift) 32%, #1a1f2f); }
-
-    .meta { color: var(--muted); font-size: 0.82rem; }
-    body.theme-dark .meta { color: #f8fbff; opacity: 0.92; }
-
-    .btn {
-      border: 1px solid var(--line);
-      border-radius: 12px;
-      background: var(--panel);
-      padding: 8px 10px;
-      cursor: pointer;
-    }
-    .btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
-    .btn.danger { background: #dc2626; border-color: #dc2626; color: #fff; }
-
-    .cover {
-      position: fixed;
-      inset: 0;
-      background: var(--bg);
-      z-index: 45;
-      display: none;
-      overflow-y: auto;
-    }
-    .cover.show { display: block; }
-    .cover-inner {
-      max-width: 960px;
-      margin: 0 auto;
-      padding: calc(env(safe-area-inset-top) + 10px) 10px calc(env(safe-area-inset-bottom) + 96px);
-      display: grid;
-      gap: 10px;
-    }
-    .panel {
-      border: 1px solid var(--line);
-      border-radius: 16px;
-      background: var(--panel);
-      padding: 10px;
-      display: grid;
-      gap: 8px;
-    }
-    .panel.type-run { background: color-mix(in oklab, var(--run) 25%, var(--panel)); }
-    .panel.type-walk { background: color-mix(in oklab, var(--walk) 32%, var(--panel)); }
-    .panel.type-hike { background: color-mix(in oklab, var(--hike) 25%, var(--panel)); }
-    .panel.type-lift { background: color-mix(in oklab, var(--lift) 30%, var(--panel)); }
-
-    .type-grid {
-      display: grid;
-      grid-template-columns: repeat(4, minmax(0, 1fr));
-      gap: 8px;
-    }
-    .type-btn {
-      border: 1px solid var(--line);
-      border-radius: 22px;
-      background: rgba(255, 255, 255, 0.75);
-      min-height: 66px;
-      cursor: pointer;
-      display: grid;
-      place-items: center;
-      gap: 2px;
-      font-weight: 700;
-      box-shadow: 0 6px 14px rgba(0, 0, 0, 0.05);
-      transform: translateY(0);
-      transition: transform 0.15s;
-    }
-    .type-btn:active { transform: translateY(1px); }
-    .type-btn.active { border: 2px solid var(--accent); }
-
-    .field { display: grid; gap: 4px; }
-    .field > label { color: var(--muted); font-size: 0.84rem; }
-    input, select, textarea {
-      width: 100%;
-      border: 1px solid var(--line);
-      border-radius: 12px;
-      background: #fff;
-      padding: 8px;
-    }
-    body.theme-dark input, body.theme-dark select, body.theme-dark textarea { background: #19253e; }
-    textarea { min-height: 70px; resize: vertical; }
-    .grid-2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
-    .grid-3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
-    .hidden { display: none !important; }
-
-    .list { display: grid; gap: 8px; max-height: 280px; overflow-y: auto; }
-    .list-item {
-      border: 1px solid var(--line);
-      border-radius: 12px;
-      background: var(--panel);
-      padding: 8px;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      gap: 8px;
-    }
-
-    .timer-box {
-      border: 1px dashed var(--line);
-      border-radius: 12px;
-      padding: 8px;
-      display: grid;
-      gap: 8px;
-    }
-    .timer-launch {
-      border: 1px solid var(--line);
-      border-radius: 12px;
-      width: 44px;
-      background: var(--panel);
-      cursor: pointer;
-      font-size: 1.2rem;
-    }
-
-    .timer-modal {
-      position: fixed;
-      inset: 0;
-      z-index: 60;
-      display: none;
-      align-items: center;
-      justify-content: center;
-      background: rgba(0, 0, 0, 0.6);
-      padding: 16px;
-    }
-    .timer-modal.show { display: flex; }
-    .timer-card {
-      width: min(500px, 100%);
-      border: 1px solid var(--line);
-      border-radius: 16px;
-      padding: 12px;
-      background: var(--panel);
-      display: grid;
-      gap: 10px;
-    }
-    .timer-value {
-      text-align: center;
-      font-size: clamp(2.6rem, 12vw, 5rem);
-      font-weight: 800;
-      letter-spacing: 0.04em;
-    }
-    .timer-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
-
-    .stats-grid {
-      display: grid;
-      gap: 10px;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-    }
-    .chart-card {
-      border: 1px solid var(--line);
-      border-radius: 14px;
-      padding: 8px;
-      background: var(--panel);
-      display: grid;
-      gap: 8px;
-    }
-    .chart-title { font-weight: 700; font-size: 0.9rem; }
-    .chart {
-      height: 190px;
-      display: grid;
-      grid-template-columns: repeat(6, minmax(0, 1fr));
-      align-items: end;
-      gap: 6px;
-    }
-    .bar-col { display: grid; gap: 3px; justify-items: center; }
-    .bar {
-      width: 100%;
-      min-height: 6px;
-      border-radius: 8px 8px 4px 4px;
-      background: linear-gradient(180deg, #79b3ff, #2563eb);
-    }
-    .bar-val { font-size: 0.7rem; font-weight: 700; }
-    .bar-label { font-size: 0.68rem; color: var(--muted); }
-
-    .tabbar {
-      position: fixed;
-      left: 0;
-      right: 0;
-      bottom: 0;
-      z-index: 70;
-      background: var(--tab-bg);
-      border-top: 1px solid var(--line);
-      padding: 8px 8px calc(env(safe-area-inset-bottom) + 8px);
-      display: grid;
-      grid-template-columns: repeat(4, minmax(0, 1fr));
-      gap: 8px;
-    }
-    .tab-btn {
-      border: 1px solid var(--line);
-      border-radius: 999px;
-      background: color-mix(in oklab, var(--panel) 85%, #ffd2ea);
-      box-shadow: 0 6px 12px rgba(15, 23, 42, 0.08);
-      cursor: pointer;
-      display: grid;
-      justify-items: center;
-      gap: 2px;
-      padding: 8px 4px;
-      font-size: 0.74rem;
-      font-weight: 700;
-    }
-    .tab-btn .icon { font-size: 1.34rem; line-height: 1; }
-
-    @media (max-width: 780px) {
-      .grid-3 { grid-template-columns: 1fr; }
-      .grid-2 { grid-template-columns: 1fr; }
-      .stats-grid { grid-template-columns: 1fr; }
-      .type-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-      .timer-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-      .day { min-height: 72px; }
-    }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <title>運動生活整合日曆</title>
+    <link rel="apple-touch-icon" href="https://duk.tw/ohlo4D.png">
+    <link rel="icon" href="https://duk.tw/ohlo4D.png">
+    <link rel="stylesheet" href="style.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 </head>
-<body>
-  <main class="app">
-    <div class="topbar">
-      <div class="title">運動生活整合日曆 V3.1</div>
-      <button id="themeBtn" class="theme-btn" type="button">切換深色</button>
-    </div>
+<body class="light-mode">
+    <header>
+        <h1>運動日曆</h1>
+        <button id="theme-toggle" class="icon-btn">🌓</button>
+    </header>
 
-    <section class="calendar">
-      <div class="month-row">
-        <button id="prevMonthBtn" class="icon-btn" type="button">◀</button>
-        <div id="monthLabel" class="month-label"></div>
-        <button id="nextMonthBtn" class="icon-btn" type="button">▶</button>
-      </div>
-      <div id="calendarGrid" class="calendar-grid"></div>
-    </section>
-  </main>
-
-  <div id="scrim" class="scrim"></div>
-
-  <section id="daySheet" class="sheet">
-    <div class="row">
-      <strong id="sheetTitle">當日紀錄</strong>
-      <button id="closeSheetBtn" class="btn" type="button">關閉</button>
-    </div>
-    <div id="dayCards" class="cards"></div>
-  </section>
-
-  <section id="cover" class="cover">
-    <div class="cover-inner">
-      <div class="row">
-        <strong id="coverTitle">新增</strong>
-        <button id="closeCoverBtn" class="btn" type="button">關閉</button>
-      </div>
-
-      <section id="entryPage" class="panel type-run">
-        <div class="type-grid">
-          <button class="type-btn active" data-type="run" type="button"><span>🏃</span><span>跑</span></button>
-          <button class="type-btn" data-type="walk" type="button"><span>🚶</span><span>走</span></button>
-          <button class="type-btn" data-type="hike" type="button"><span>⛰️</span><span>山</span></button>
-          <button class="type-btn" data-type="lift" type="button"><span>🏋️</span><span>重</span></button>
-        </div>
-
-        <form id="entryForm" class="grid-2">
-          <div class="field"><label for="recordDate">日期</label><input id="recordDate" type="date" required /></div>
-          <div class="field"><label for="titleInput">標題</label><input id="titleInput" maxlength="48" required /></div>
-          <div class="field"><label for="noteInput">備註</label><textarea id="noteInput"></textarea></div>
-
-          <div id="ocrBlock" class="field">
-            <label for="ocrInput">OCR 截圖辨識</label>
-            <input id="ocrInput" type="file" accept="image/*" />
-            <button id="ocrBtn" class="btn" type="button">辨識數字</button>
-            <div id="ocrStatus" class="meta">保留 OCR 與 LocalStorage，圖片不保存。</div>
-          </div>
-
-          <div id="outdoorFields" class="grid-3">
-            <div class="field"><label for="distanceInput">距離 (km)</label><input id="distanceInput" type="number" min="0" step="0.01" /></div>
-            <div class="field"><label for="hoursInput">時間-小時</label><input id="hoursInput" type="number" min="0" step="1" /></div>
-            <div class="field"><label for="minutesInput">時間-分鐘</label><input id="minutesInput" type="number" min="0" max="59" step="1" /></div>
-            <div class="field"><label for="stepsInput">步數</label><input id="stepsInput" type="number" min="0" step="1" /></div>
-            <div class="field"><label for="elevUpInput">爬升 (m)</label><input id="elevUpInput" type="number" min="0" step="1" /></div>
-            <div class="field"><label for="elevDownInput">下降 (m)</label><input id="elevDownInput" type="number" min="0" step="1" /></div>
-          </div>
-
-          <div id="liftFields" class="grid-3 hidden">
-            <div class="field"><label for="partSelect">部位</label><select id="partSelect"></select></div>
-            <div class="field"><label for="exerciseSelect">動作</label><select id="exerciseSelect"></select></div>
-            <div class="field"><label for="weightInput">重量 (kg)</label><input id="weightInput" type="number" min="0" step="0.5" /></div>
-            <div class="field"><label for="setsInput">組數</label><input id="setsInput" type="number" min="0" step="1" /></div>
-            <div class="field"><label for="repsInput">次數</label><input id="repsInput" type="number" min="0" step="1" /></div>
-            <div class="field">
-              <label for="secondsInput">秒數</label>
-              <div style="display:flex; gap:8px;">
-                <input id="secondsInput" type="number" min="0" step="1" />
-                <button id="timerOpenBtn" class="timer-launch" type="button" title="馬錶">⏱</button>
-              </div>
+    <main id="app-content">
+        <section id="calendar-view" class="view-section active">
+            <div id="calendar-header">
+                <button id="prev-month">＜</button>
+                <h2 id="current-month-year"></h2>
+                <button id="next-month">＞</button>
             </div>
-          </div>
-
-          <div style="display:flex; gap:8px; flex-wrap:wrap;">
-            <button class="btn primary" type="submit">儲存</button>
-            <button id="resetFormBtn" class="btn" type="button">清空</button>
-          </div>
-        </form>
-      </section>
-
-      <section id="managePage" class="panel hidden">
-        <div class="grid-2">
-          <div class="field"><label for="managePartSelect">部位</label><select id="managePartSelect"></select></div>
-          <div class="field">
-            <label for="newPartInput">新增部位</label>
-            <div style="display:flex; gap:8px;">
-              <input id="newPartInput" />
-              <button id="addPartBtn" class="btn" type="button">新增</button>
-              <button id="deletePartBtn" class="btn danger" type="button">刪除</button>
+            <div id="calendar-grid"></div>
+            <div id="day-detail-panel" class="hidden">
+                <div class="panel-header">
+                    <h3>當日運動明細</h3>
+                    <button onclick="closeDetail()">✕</button>
+                </div>
+                <div id="detail-list"></div>
             </div>
-          </div>
-        </div>
-        <div class="field">
-          <label for="newExerciseInput">新增動作</label>
-          <div style="display:flex; gap:8px;">
-            <input id="newExerciseInput" />
-            <button id="addExerciseBtn" class="btn" type="button">新增</button>
-          </div>
-        </div>
-        <div id="exerciseList" class="list"></div>
-      </section>
+        </section>
 
-      <section id="statsPage" class="panel hidden">
-        <div class="grid-2">
-          <div class="field"><label for="periodSelect">維度</label><select id="periodSelect"><option value="day">日</option><option value="month">月</option><option value="quarter">季</option><option value="year">年</option></select></div>
-          <div class="field"><label>&nbsp;</label><button id="updateChartBtn" class="btn">更新圖表</button></div>
-        </div>
-        <div class="grid-2">
-          <div class="field"><label for="startDateInput">開始日期</label><input id="startDateInput" type="date" /></div>
-          <div class="field"><label for="endDateInput">結束日期</label><input id="endDateInput" type="date" /></div>
-        </div>
-        <div id="statsSummary" class="meta"></div>
-        <div class="stats-grid">
-          <article class="chart-card"><div class="chart-title">步數統計</div><div id="chartSteps" class="chart"></div></article>
-          <article class="chart-card"><div class="chart-title">距離統計</div><div id="chartDistance" class="chart"></div></article>
-          <article class="chart-card"><div class="chart-title">爬升統計</div><div id="chartElev" class="chart"></div></article>
-          <article class="chart-card"><div class="chart-title">重訓負荷</div><div id="chartLoad" class="chart"></div></article>
-        </div>
-      </section>
+        <section id="add-view" class="view-section">
+            <div class="type-selector">
+                <button class="type-btn" data-type="run" style="background:#FF5252">👟<br>跑步</button>
+                <button class="type-btn" data-type="walk" style="background:#FFD740">👣<br>散步</button>
+                <button class="type-btn" data-type="climb" style="background:#448AFF">🏔️<br>登山</button>
+                <button class="type-btn" data-type="gym" style="background:#B388FF">💪<br>重訓</button>
+            </div>
+            <form id="workout-form" class="hidden">
+                <div id="form-fields">
+                    </div>
+                <div class="ocr-section">
+                    <input type="file" id="ocr-upload" accept="image/*" hidden>
+                    <button type="button" class="ocr-btn" onclick="document.getElementById('ocr-upload').click()">📷 截圖辨識數字</button>
+                    <p id="ocr-status"></p>
+                </div>
+                <button type="submit" class="save-btn">儲存運動紀錄</button>
+            </form>
+        </section>
 
-      <section id="backupPage" class="panel hidden">
-        <div style="display:flex; gap:8px; flex-wrap:wrap;">
-          <button id="exportBtn" class="btn" type="button">匯出備份</button>
-          <button id="importBtn" class="btn" type="button">匯入備份</button>
-          <input id="importFile" class="hidden" type="file" accept="application/json" />
+        <section id="manage-view" class="view-section">
+            <h2>管理重訓項目</h2>
+            <div class="admin-input-group">
+                <input type="text" id="new-part" placeholder="部位 (如:胸)">
+                <input type="text" id="new-action" placeholder="動作 (如:臥推)">
+                <button onclick="addGymAction()">新增</button>
+            </div>
+            <ul id="gym-action-list"></ul>
+        </section>
+
+        <section id="stats-view" class="view-section">
+            <h2>統計中心</h2>
+            <div class="filter-bar">
+                <div class="date-inputs">
+                    <input type="date" id="stat-start">
+                    <span>至</span>
+                    <input type="date" id="stat-end">
+                </div>
+                <select id="stat-period">
+                    <option value="day">日報</option>
+                    <option value="month">月報</option>
+                    <option value="year">年報</option>
+                </select>
+                <button onclick="updateCharts()" class="refresh-btn">更新圖表</button>
+            </div>
+            <div class="charts-scroll-area">
+                <canvas id="stepsChart"></canvas>
+                <canvas id="distChart"></canvas>
+                <canvas id="climbChart"></canvas>
+                <canvas id="gymChart"></canvas>
+            </div>
+        </section>
+
+        <section id="backup-view" class="view-section">
+            <h2>資料備份</h2>
+            <div class="backup-options">
+                <button onclick="exportData()" class="backup-btn">💾 匯出資料 (JSON)</button>
+                <input type="file" id="import-file" hidden>
+                <button onclick="document.getElementById('import-file').click()" class="backup-btn">📂 匯入資料</button>
+            </div>
+        </section>
+    </main>
+
+    <nav class="bottom-nav">
+        <button class="nav-item active" data-target="calendar-view">📅<br>日曆</button>
+        <button class="nav-item" data-target="add-view">➕<br>新增</button>
+        <button class="nav-item" data-target="manage-view">⚙️<br>管理</button>
+        <button class="nav-item" data-target="stats-view">📊<br>統計</button>
+        <button class="nav-item" data-target="backup-view">💾<br>備份</button>
+    </nav>
+
+    <div id="timer-modal" class="modal hidden">
+        <div class="modal-content">
+            <h2 id="timer-display">00:00</h2>
+            <div class="timer-presets">
+                <button onclick="startTimer(30)">30s</button>
+                <button onclick="startTimer(60)">60s</button>
+                <button onclick="startTimer(90)">90s</button>
+                <button onclick="startTimer(120)">120s</button>
+            </div>
+            <div class="timer-custom">
+                <input type="number" id="custom-timer" placeholder="秒">
+                <button onclick="startTimer(document.getElementById('custom-timer').value)">啟動</button>
+            </div>
+            <button onclick="closeTimer()" class="close-timer-btn">關閉</button>
         </div>
-        <div class="meta">單檔版，保留 OCR / LocalStorage 相關邏輯。</div>
-      </section>
     </div>
-  </section>
 
-  <section id="timerModal" class="timer-modal">
-    <div class="timer-card">
-      <div class="row">
-        <strong>休息倒數</strong>
-        <button id="timerCloseBtn" class="btn" type="button">關閉</button>
-      </div>
-      <div id="timerValue" class="timer-value">01:30</div>
-      <div class="timer-grid">
-        <button class="btn timer-quick" data-sec="30" type="button">30s</button>
-        <button class="btn timer-quick" data-sec="60" type="button">60s</button>
-        <button class="btn timer-quick" data-sec="90" type="button">90s</button>
-        <button class="btn timer-quick" data-sec="120" type="button">120s</button>
-      </div>
-      <div class="timer-grid">
-        <button id="timerStartBtn" class="btn primary" type="button">開始</button>
-        <button id="timerStopBtn" class="btn danger" type="button">停止</button>
-      </div>
-    </div>
-  </section>
-
-  <nav class="tabbar">
-    <button class="tab-btn" data-page="entry" type="button"><span class="icon">＋</span><span>新增</span></button>
-    <button class="tab-btn" data-page="manage" type="button"><span class="icon">⚙️</span><span>管理</span></button>
-    <button class="tab-btn" data-page="stats" type="button"><span class="icon">📊</span><span>統計</span></button>
-    <button class="tab-btn" data-page="backup" type="button"><span class="icon">💾</span><span>備份</span></button>
-  </nav>
-
-  <script>
+    <script src="script.js"></script>
+</body>
+</html>
