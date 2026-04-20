@@ -47,7 +47,10 @@
                 <div id="form-fields"></div>
                 <div class="ocr-section">
                     <input type="file" id="ocr-upload" accept="image/*" hidden>
-                    <button type="button" class="ocr-btn" onclick="document.getElementById('ocr-upload').click()">📷 截圖辨識數字</button>
+                    <div class="ocr-actions">
+                        <button type="button" class="ocr-btn" onclick="document.getElementById('ocr-upload').click()">📷 截圖辨識數字</button>
+                        <button type="button" class="clear-ocr-btn" onclick="clearFormInputs()">🗑️ 清空輸入</button>
+                    </div>
                     <p id="ocr-status"></p>
                 </div>
                 <button type="submit" class="save-btn">儲存運動紀錄</button>
@@ -60,9 +63,9 @@
             <div class="admin-input-group">
                 <input type="text" id="new-part" placeholder="部位 (如:胸)">
                 <input type="text" id="new-action" placeholder="動作 (如:臥推)">
-                <button onclick="addGymAction()">新增</button>
+                <button onclick="addGymAction()" class="manage-action-btn">新增動作</button>
             </div>
-            <ul id="gym-action-list"></ul>
+            <div id="gym-manage-container"></div>
         </section>
 
         <section id="stats-view" class="view-section overlay">
@@ -114,6 +117,10 @@
             <button onclick="startTimer(60)">60s</button>
             <button onclick="startTimer(90)">90s</button>
             <button onclick="startTimer(120)">120s</button>
+        </div>
+        <div class="timer-custom-input">
+            <input type="number" id="manual-timer-sec" placeholder="輸入秒數 (如: 45)">
+            <button onclick="startTimer(document.getElementById('manual-timer-sec').value)" class="manual-timer-btn">啟動</button>
         </div>
         <button onclick="closeTimer()" class="close-timer-btn">結束並關閉</button>
     </div>

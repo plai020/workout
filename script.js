@@ -1,6 +1,6 @@
 /**
  * 每筆紀錄：{ id, date: 'YYYY-MM-DD', type: 'run'|'walk'|'climb'|'gym', ... }
- * run/climb/walk：distance (km), hours, minutes；walk 另有 steps；climb 另有 up (m)
+ * run/climb/walk：distance (km), hours, minutes；walk 另有 steps；climb 另有 ascent (m)
  * gym：part, action, weight, sets, reps, seconds (選填)
  */
 
@@ -86,17 +86,16 @@ function initNavigation() {
   document.querySelectorAll('.nav-item').forEach((btn) => {
     btn.onclick = () => {
       const target = btn.dataset.target;
-      
-      // 先移除所有導航項的 active 狀態
-      document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
-      
-      // 開啟對應 Overlay
       openOverlay(target, btn);
     };
   });
 }
 
 function openOverlay(id, btn = null) {
+  // 單一視窗原則：關閉所有已開啟的視窗
+  document.querySelectorAll('.view-section.overlay').forEach(s => s.classList.remove('active'));
+  document.getElementById('day-detail-panel')?.classList.add('hidden');
+  
   const overlay = document.getElementById(id);
   if (!overlay) return;
   
@@ -108,7 +107,10 @@ function openOverlay(id, btn = null) {
   }
   
   overlay.classList.add('active');
-  if (btn) btn.classList.add('active'); // 標記點選的按鈕
+  if (btn) {
+    document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+    btn.classList.add('active'); // 標記點選的按鈕
+  }
   
   if (id === 'stats-view') updateCharts();
 }
@@ -145,7 +147,7 @@ function dayIntensityScore(dayRecords) {
   dayRecords.forEach((r) => {
     if (r.type === 'walk') s += Number(r.steps || 0) / 4000;
     if (r.type === 'run') s += Number(r.distance || 0) / 3 + (Number(r.hours || 0) * 60 + Number(r.minutes || 0)) / 90;
-    if (r.type === 'climb') s += Number(r.distance || 0) / 4 + Number(r.up || 0) / 600;
+    if (r.type === 'climb') s += Number(r.distance || 0) / 4 + Number(r.ascent || 0) / 600;
     if (r.type === 'gym') s += (Number(r.weight || 0) * Number(r.sets || 0) * Number(r.reps || 0)) / 6000;
   });
   return Math.min(s, 1);
@@ -174,7 +176,11 @@ function renderCalendar() {
   for (let i = 1; i <= daysInMonth; i++) {
     const dayDiv = document.createElement('div');
     dayDiv.className = 'calendar-day';
-    dayDiv.innerText = String(i);
+    
+    // 日期數字
+    const dateNum = document.createElement('span');
+    dateNum.innerText = String(i);
+    dayDiv.appendChild(dateNum);
 
     const ymd = `${y}-${String(m + 1).padStart(2, '0')}-${String(i).padStart(2, '0')}`;
     const dayRecords = records.filter((r) => r.date === ymd);
@@ -209,6 +215,10 @@ function closeDetail() {
 }
 
 function showDayDetail(dayOfMonth) {
+  // 單一視窗原則
+  document.querySelectorAll('.view-section.overlay').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+
   const panel = document.getElementById('day-detail-panel');
   const list = document.getElementById('detail-list');
   if (!panel || !list) return;
@@ -256,6 +266,7 @@ function typeLabel(t) {
 function summaryLine(r) {
   if (r.type === 'gym') return `${r.part || ''} ${r.action || ''} ${r.weight || 0}kg ×${r.sets || 0}×${r.reps || 0}`;
   const parts = [];
+  if (r.title) parts.push(`[${r.title}]`);
   if (r.distance != null) parts.push(`${r.distance} km`);
   if (r.hours || r.minutes) parts.push(`${r.hours || 0}時${r.minutes || 0}分`);
   if (r.type === 'walk' && r.steps != null) parts.push(`${r.steps} 步`);
@@ -309,6 +320,9 @@ function editRecord(id) {
     if (rep) rep.value = r.reps ?? '';
     if (sec) sec.value = r.seconds ?? '';
   } else {
+    const titleEl = document.getElementById('f-title');
+    if (titleEl) titleEl.value = r.title || '';
+    
     const dist = document.getElementById('f-dist');
     const hr = document.getElementById('f-hr');
     const mn = document.getElementById('f-min');
@@ -347,7 +361,6 @@ function editRecord(id) {
   }
 
   form.dataset.editId = id;
-  closeDetail();
 }
 
 // --- 新增表單 ---
@@ -384,6 +397,7 @@ function renderFields(type) {
       <button type="button" class="timer-btn" onclick="openTimer()">⏱️ 開啟馬錶</button>
     `;
   } else {
+    html += `<input type="text" id="f-title" placeholder="訓練標題 (選填)">`;
     html += `
       <input type="number" step="0.01" min="0" id="f-dist" placeholder="距離 (km)">
       <div class="time-group">
@@ -501,6 +515,7 @@ function initWorkoutFormSubmit() {
       rec.reps = numOrNull(document.getElementById('f-reps')?.value);
       rec.seconds = numOrNull(document.getElementById('f-seconds')?.value);
     } else {
+      rec.title = document.getElementById('f-title')?.value?.trim() || '';
       rec.distance = numOrNull(document.getElementById('f-dist')?.value, 2);
       rec.hours = numOrNull(document.getElementById('f-hr')?.value);
       rec.minutes = numOrNull(document.getElementById('f-min')?.value);
@@ -574,6 +589,13 @@ function initOcrUpload() {
   });
 }
 
+function clearFormInputs() {
+  const inputs = document.querySelectorAll('#workout-form input[type="number"], #workout-form input[type="text"]');
+  inputs.forEach(input => {
+    if (input.id !== 'f-date') input.value = '';
+  });
+}
+
 function applyOcrNumbers(text) {
   // 提取所有數字 (包含小數)
   const matches = text.match(/\d+(\.\d+)?/g);
@@ -581,13 +603,21 @@ function applyOcrNumbers(text) {
   
   const numbers = matches.map(m => m);
   
-  // 獲取目前表單中所有的數字輸入框
-  const inputs = document.querySelectorAll('#workout-form input[type="number"]');
-  
-  // 依序填入
-  inputs.forEach((input, index) => {
-    if (numbers[index] != null) {
-      input.value = numbers[index];
+  // 優先填入距離 (通常是第一個小數)
+  const distEl = document.getElementById('f-dist');
+  const otherInputs = Array.from(document.querySelectorAll('#workout-form input[type="number"]'))
+    .filter(i => i.id !== 'f-dist' && i.id !== 'f-date');
+
+  let numIdx = 0;
+  if (distEl && numbers[numIdx]) {
+    distEl.value = numbers[numIdx];
+    numIdx++;
+  }
+
+  otherInputs.forEach((input) => {
+    if (numbers[numIdx] != null) {
+      input.value = numbers[numIdx];
+      numIdx++;
     }
   });
 }
@@ -625,8 +655,6 @@ function startTimer(sec) {
       
       // 視覺回饋：震動 (如果支援)
       if (window.navigator.vibrate) window.navigator.vibrate([300, 100, 300, 100, 300]);
-      
-      // 不再使用 alert，直到點擊「結束並關閉」按鈕才停止
     }
   }, 1000);
 }
@@ -673,7 +701,7 @@ function aggregateForCharts(filtered) {
     if (!buckets[key]) buckets[key] = { steps: 0, dist: 0, up: 0, load: 0 };
     if (r.type === 'walk') buckets[key].steps += Number(r.steps || 0);
     if (r.type === 'run' || r.type === 'climb') buckets[key].dist += Number(r.distance || 0);
-    if (r.type === 'climb') buckets[key].up += Number(r.up || 0);
+    if (r.type === 'climb') buckets[key].up += Number(r.ascent || 0);
     if (r.type === 'gym') {
       buckets[key].load += Number(r.weight || 0) * Number(r.sets || 0) * Number(r.reps || 0);
     }
@@ -690,6 +718,13 @@ function aggregateForCharts(filtered) {
 }
 
 function updateCharts() {
+  const startStr = document.getElementById('stat-start')?.value;
+  const endStr = document.getElementById('stat-end')?.value;
+  if (startStr && endStr && startStr > endStr) {
+    alert('起始日期不能大於結束日期');
+    return;
+  }
+
   const filtered = filterRecordsByStatRange();
   const { labels, steps, dist, up, load } = aggregateForCharts(filtered);
 
@@ -702,6 +737,7 @@ function updateCharts() {
     type: 'bar',
     options: {
       responsive: true,
+      maintainAspectRatio: false,
       scales: { y: { beginAtZero: true } }
     }
   };
@@ -767,36 +803,56 @@ function addGymAction() {
   const part = document.getElementById('new-part')?.value?.trim();
   const action = document.getElementById('new-action')?.value?.trim();
   if (!part || !action) return alert('請輸入部位與動作');
+  
+  // 防重機制
+  const exists = gymActions.some(a => a.part === part && a.action === action);
+  if (exists) return alert('此部位與動作已存在！');
+
   gymActions.push({ part, action });
   persistGymActions();
   document.getElementById('new-part').value = '';
   document.getElementById('new-action').value = '';
   renderGymManageList();
   
-  // 立即更新新增表單中的選單
-  if (currentFormType === 'gym') {
-    renderFields('gym');
-  }
+  if (currentFormType === 'gym') renderFields('gym');
 }
 
 function renderGymManageList() {
-  const ul = document.getElementById('gym-action-list');
-  if (!ul) return;
-  ul.innerHTML = '';
+  const container = document.getElementById('gym-manage-container');
+  if (!container) return;
+  container.innerHTML = '';
+  
+  // 按部位分組
+  const groups = {};
   gymActions.forEach((item, idx) => {
-    const li = document.createElement('li');
-    li.textContent = `${item.part} — ${item.action}`;
-    const del = document.createElement('button');
-    del.textContent = '刪除';
-    del.onclick = () => {
-      gymActions.splice(idx, 1);
-      persistGymActions();
-      renderGymManageList();
-      if (currentFormType === 'gym') renderFields('gym');
-    };
-    li.appendChild(del);
-    ul.appendChild(li);
+    if (!groups[item.part]) groups[item.part] = [];
+    groups[item.part].push({ ...item, originalIdx: idx });
   });
+
+  Object.keys(groups).sort().forEach(part => {
+    const groupDiv = document.createElement('div');
+    groupDiv.className = 'gym-group';
+    groupDiv.innerHTML = `<h3>${escapeHtml(part)}</h3>`;
+    
+    groups[part].forEach(item => {
+      const itemDiv = document.createElement('div');
+      itemDiv.className = 'gym-action-item';
+      itemDiv.innerHTML = `
+        <span>${escapeHtml(item.action)}</span>
+        <button onclick="deleteGymAction(${item.originalIdx})">刪除</button>
+      `;
+      groupDiv.appendChild(itemDiv);
+    });
+    container.appendChild(groupDiv);
+  });
+}
+
+function deleteGymAction(idx) {
+  if (!confirm('確定刪除此動作？')) return;
+  gymActions.splice(idx, 1);
+  persistGymActions();
+  renderGymManageList();
+  if (currentFormType === 'gym') renderFields('gym');
 }
 
 // --- 備份 ---
