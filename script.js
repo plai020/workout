@@ -86,12 +86,17 @@ function initNavigation() {
   document.querySelectorAll('.nav-item').forEach((btn) => {
     btn.onclick = () => {
       const target = btn.dataset.target;
-      openOverlay(target);
+      
+      // 先移除所有導航項的 active 狀態
+      document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+      
+      // 開啟對應 Overlay
+      openOverlay(target, btn);
     };
   });
 }
 
-function openOverlay(id) {
+function openOverlay(id, btn = null) {
   const overlay = document.getElementById(id);
   if (!overlay) return;
   
@@ -103,12 +108,17 @@ function openOverlay(id) {
   }
   
   overlay.classList.add('active');
+  if (btn) btn.classList.add('active'); // 標記點選的按鈕
+  
   if (id === 'stats-view') updateCharts();
 }
 
 function closeOverlay(id) {
   const overlay = document.getElementById(id);
   if (overlay) overlay.classList.remove('active');
+  
+  // 關閉 Overlay 時，清空導航列的 active 狀態（回到月曆）
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
 }
 
 function initCalendarNav() {
@@ -585,11 +595,15 @@ function applyOcrNumbers(text) {
 // --- 馬錶 ---
 let timer;
 function openTimer() {
-  document.getElementById('timer-modal')?.classList.remove('hidden');
+  const modal = document.getElementById('timer-modal');
+  modal?.classList.add('active');
+  modal?.classList.remove('timer-blink'); // 確保開啟時沒有閃爍
 }
 function closeTimer() {
   clearInterval(timer);
-  document.getElementById('timer-modal')?.classList.add('hidden');
+  const modal = document.getElementById('timer-modal');
+  modal?.classList.remove('active');
+  modal?.classList.remove('timer-blink');
 }
 function startTimer(sec) {
   const n = Number(sec);
@@ -597,25 +611,22 @@ function startTimer(sec) {
   clearInterval(timer);
   let r = Math.floor(n);
   const display = document.getElementById('timer-display');
-  const modalContent = document.querySelector('.modal-content');
+  const modal = document.getElementById('timer-modal');
   
   if (display) display.innerText = `${Math.floor(r / 60)}:${(r % 60).toString().padStart(2, '0')}`;
-  modalContent?.classList.remove('timer-blink'); // 重置
+  modal?.classList.remove('timer-blink'); // 重置
   
   timer = setInterval(() => {
     r--;
     if (display) display.innerText = `${Math.floor(r / 60)}:${(r % 60).toString().padStart(2, '0')}`;
     if (r <= 0) {
       clearInterval(timer);
-      modalContent?.classList.add('timer-blink');
-      // 視覺回饋：強烈閃爍 + 震動 (如果支援)
-      if (window.navigator.vibrate) window.navigator.vibrate([200, 100, 200]);
+      modal?.classList.add('timer-blink'); // 啟動呼吸燈效果
       
-      // 彈窗提示，使用者點擊後才停止閃爍
-      setTimeout(() => {
-        alert('時間到！休息結束 💪');
-        modalContent?.classList.remove('timer-blink');
-      }, 10);
+      // 視覺回饋：震動 (如果支援)
+      if (window.navigator.vibrate) window.navigator.vibrate([300, 100, 300, 100, 300]);
+      
+      // 不再使用 alert，直到點擊「結束並關閉」按鈕才停止
     }
   }, 1000);
 }

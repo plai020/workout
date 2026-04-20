@@ -107,21 +107,15 @@
         <button class="nav-item" data-target="backup-view">💾<br>備份</button>
     </nav>
 
-    <div id="timer-modal" class="modal hidden">
-        <div class="modal-content">
-            <h2 id="timer-display">00:00</h2>
-            <div class="timer-presets">
-                <button onclick="startTimer(30)">30s</button>
-                <button onclick="startTimer(60)">60s</button>
-                <button onclick="startTimer(90)">90s</button>
-                <button onclick="startTimer(120)">120s</button>
-            </div>
-            <div class="timer-custom">
-                <input type="number" id="custom-timer" placeholder="秒">
-                <button onclick="startTimer(document.getElementById('custom-timer').value)">啟動</button>
-            </div>
-            <button onclick="closeTimer()" class="close-timer-btn">關閉</button>
+    <div id="timer-modal" class="modal">
+        <h2 id="timer-display">00:00</h2>
+        <div class="timer-presets">
+            <button onclick="startTimer(30)">30s</button>
+            <button onclick="startTimer(60)">60s</button>
+            <button onclick="startTimer(90)">90s</button>
+            <button onclick="startTimer(120)">120s</button>
         </div>
+        <button onclick="closeTimer()" class="close-timer-btn">結束並關閉</button>
     </div>
 
     <script src="script.js"></script>

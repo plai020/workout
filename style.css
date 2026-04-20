@@ -27,24 +27,25 @@ body {
     overflow-x: hidden;
     display: flex;
     flex-direction: column;
-    min-height: 100vh;
+    height: 100vh; /* 固定高度 */
 }
 
 header {
-    padding: 10px 20px;
+    padding: 5px 20px; /* 縮減 padding */
     display: flex;
     justify-content: flex-end;
     align-items: center;
+    min-height: 40px;
 }
 
 .icon-btn.circular {
-    width: 50px;
-    height: 50px;
+    width: 45px;
+    height: 45px;
     border-radius: 50%;
     background: var(--card-bg);
     border: 1px solid rgba(0,0,0,0.1);
     box-shadow: 0 4px 10px rgba(0,0,0,0.1);
-    font-size: 24px;
+    font-size: 20px;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -56,11 +57,11 @@ header {
     position: fixed;
     top: 0;
     left: 0;
-    width: 100%;
-    height: 100%;
+    width: 100vw;
+    height: 100vh;
     background: var(--bg-color);
     z-index: 2000;
-    padding: 40px 20px;
+    padding: 60px 20px 100px; /* 留出底部導航空間 */
     overflow-y: auto;
     display: none;
     flex-direction: column;
@@ -74,12 +75,18 @@ header {
     position: absolute;
     top: 20px;
     right: 20px;
-    background: none;
+    background: rgba(0,0,0,0.05);
     border: none;
-    font-size: 28px;
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    font-size: 24px;
     color: var(--text-color);
     cursor: pointer;
     z-index: 2001;
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 
 /* 月曆擴大與優化 */
@@ -87,27 +94,28 @@ header {
     flex: 1;
     display: flex;
     flex-direction: column;
+    height: 100%;
 }
 #calendar-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 0 20px 10px;
+    padding: 0 20px 5px;
 }
 .month-nav-btn {
     background: var(--card-bg);
     border: 1px solid rgba(0,0,0,0.1);
     border-radius: 12px;
-    width: 60px;
-    height: 50px;
-    font-size: 20px;
+    width: 50px;
+    height: 45px;
+    font-size: 18px;
     display: flex;
     align-items: center;
     justify-content: center;
     box-shadow: 0 2px 5px rgba(0,0,0,0.05);
 }
 #current-month-year {
-    font-size: 22px;
+    font-size: 20px;
     margin: 0;
 }
 
@@ -117,18 +125,20 @@ header {
     gap: 8px;
     padding: 10px;
     flex: 1;
+    max-height: 70vh; /* 佔據約 70% 高度 */
 }
 .calendar-day {
-    aspect-ratio: 0.8 / 1; /* 拉高格子 */
     background: var(--card-bg);
     border-radius: 12px;
     position: relative;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 18px; /* 加大數字 */
+    font-size: 20px; /* 加大數字 */
     font-weight: bold;
     box-shadow: 0 2px 6px rgba(0,0,0,0.08);
+    height: 100%; /* 自動填滿網格 */
+    min-height: 80px;
 }
 
 /* 運動類型按鈕 - 巨大圓潤 */
@@ -138,12 +148,12 @@ header {
     gap: 20px;
     width: 100%;
     max-width: 400px;
-    margin-top: 20px;
+    margin-top: 10px;
 }
 .type-btn {
     aspect-ratio: 1/1;
     border: none;
-    border-radius: 40px;
+    border-radius: 35px;
     color: white;
     display: flex;
     flex-direction: column;
@@ -153,19 +163,19 @@ header {
     transition: transform 0.2s;
 }
 .type-btn:active { transform: scale(0.95); }
-.type-btn .emoji { font-size: 50px; margin-bottom: 5px; }
-.type-btn .label { font-size: 16px; font-weight: bold; }
+.type-btn .emoji { font-size: 45px; margin-bottom: 5px; }
+.type-btn .label { font-size: 15px; font-weight: bold; }
 
 /* 表單優化 */
-#workout-form { width: 100%; max-width: 450px; margin-top: 30px; }
-input, select, .save-btn, .ocr-btn {
+#workout-form { width: 100%; max-width: 450px; margin-top: 20px; }
+input, select, .save-btn, .ocr-btn, .timer-btn {
     width: 100%;
-    height: 55px; /* 高度 > 50px */
+    height: 50px; /* 符合需求 50px */
     border-radius: 15px;
     border: 1px solid rgba(0,0,0,0.1);
     padding: 0 15px;
-    font-size: 16px;
-    margin-bottom: 15px;
+    font-size: 18px; /* 符合需求 18px */
+    margin-bottom: 12px;
     background: var(--card-bg);
     color: var(--text-color);
 }
@@ -174,11 +184,15 @@ input, select, .save-btn, .ocr-btn {
     color: white;
     font-weight: bold;
     border: none;
-    margin-top: 10px;
-    font-size: 18px;
+    margin-top: 5px;
 }
 .ocr-btn {
     background: #4caf50;
+    color: white;
+    border: none;
+}
+.timer-btn {
+    background: #607d8b;
     color: white;
     border: none;
 }
@@ -194,12 +208,12 @@ body.dark-mode .card-walk { background: #332f1b !important; color: #ffff8d; }
 body.dark-mode .card-climb { background: #1a237e !important; color: #82b1ff; }
 body.dark-mode .card-gym { background: #311b92 !important; color: #ea80fc; }
 
-/* 底部導航 */
+/* 底部導航 - 固定在最上層 */
 .bottom-nav {
-    position: fixed; bottom: 0; width: 100%; height: 80px;
+    position: fixed; bottom: 0; width: 100%; height: 85px;
     background: var(--nav-bg); display: flex; justify-content: space-around;
     align-items: center; border-top: 1px solid rgba(0,0,0,0.1);
-    box-shadow: 0 -2px 15px rgba(0,0,0,0.1); z-index: 1000;
+    box-shadow: 0 -2px 15px rgba(0,0,0,0.1); z-index: 9999; /* 確保在最上層 */
 }
 .nav-item {
     border: none; background: none; color: #888; font-size: 13px;
@@ -207,6 +221,35 @@ body.dark-mode .card-gym { background: #311b92 !important; color: #ea80fc; }
     text-align: center; flex: 1;
 }
 .nav-item.active { color: var(--accent); font-weight: bold; }
+
+/* 馬錶全螢幕模式 */
+#timer-modal {
+    position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+    background: rgba(0, 0, 0, 0.9); /* 深色半透明 */
+    z-index: 10000; display: none;
+    flex-direction: column; align-items: center; justify-content: center;
+    color: white;
+}
+#timer-modal.active { display: flex; }
+#timer-display { font-size: 120px; font-weight: 800; margin-bottom: 40px; }
+.timer-presets { display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px; width: 80%; max-width: 300px; }
+.timer-presets button {
+    height: 60px; border-radius: 15px; border: 1px solid rgba(255,255,255,0.3);
+    background: rgba(255,255,255,0.1); color: white; font-size: 20px;
+}
+.close-timer-btn {
+    margin-top: 50px; width: 200px; height: 60px; border-radius: 30px;
+    background: #f44336; color: white; border: none; font-size: 20px; font-weight: bold;
+}
+
+/* 呼吸燈效果 */
+.timer-blink {
+    animation: breathing-red 1.5s ease-in-out infinite;
+}
+@keyframes breathing-red {
+    0%, 100% { background: rgba(0, 0, 0, 0.9); }
+    50% { background: rgba(255, 82, 82, 0.6); }
+}
 
 /* 其他修正 */
 .time-group { display: flex; gap: 10px; }
