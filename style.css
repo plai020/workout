@@ -18,84 +18,208 @@ body.dark-mode {
 }
 
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+/* 基礎佈局優化 */
 body {
     font-family: -apple-system, 'PingFang TC', sans-serif;
     background-color: var(--bg-color);
     color: var(--text-color);
     margin: 0; padding-bottom: 90px;
     overflow-x: hidden;
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
 }
 
-/* 底部導航 - 可愛圓潤設計 */
-.bottom-nav {
-    position: fixed; bottom: 0; width: 100%; height: 75px;
-    background: var(--nav-bg); display: flex; justify-content: space-around;
-    align-items: center; border-top: 1px solid rgba(0,0,0,0.1);
-    box-shadow: 0 -2px 10px rgba(0,0,0,0.05); z-index: 1000;
-}
-.nav-item {
-    border: none; background: none; color: #888; font-size: 11px;
-    padding: 8px 15px; border-radius: 20px; transition: 0.3s;
-}
-.nav-item.active { color: var(--accent); background: rgba(255, 82, 82, 0.1); font-weight: bold; }
-
-/* 月曆與熱點圖 */
-#calendar-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; padding: 10px; }
-.calendar-day {
-    aspect-ratio: 1/1; background: var(--card-bg); border-radius: 12px;
-    position: relative; display: flex; align-items: center; justify-content: center;
-    font-size: 14px; box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-}
-.day-dots { position: absolute; bottom: 4px; display: flex; gap: 2px; }
-.dot { width: 4px; height: 4px; border-radius: 50%; }
-.count-badge {
-    position: absolute; top: 4px; right: 4px; background: #FF5252;
-    color: white; font-size: 9px; border-radius: 50%; width: 15px; height: 15px;
-    display: flex; align-items: center; justify-content: center;
+header {
+    padding: 10px 20px;
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
 }
 
-/* 彈出面板滑動優化 */
-#day-detail-panel {
-    position: fixed; bottom: 85px; left: 5%; width: 90%; max-height: 60vh;
-    background: var(--card-bg); border-radius: 25px; box-shadow: 0 -5px 20px rgba(0,0,0,0.2);
-    padding: 20px; overflow-y: auto; z-index: 999;
-}
-.hidden { display: none !important; }
-
-/* 當日明細：編輯 / 刪除 */
-.detail-card {
-    padding: 12px;
-    border-radius: 14px;
-    margin-bottom: 10px;
-    border: 1px solid rgba(0,0,0,0.08);
-}
-.detail-actions { display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
-.btn-small {
-    padding: 6px 14px;
-    border-radius: 999px;
-    border: 1px solid rgba(0,0,0,0.15);
+.icon-btn.circular {
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
     background: var(--card-bg);
-    color: var(--text-color);
-    font-size: 13px;
+    border: 1px solid rgba(0,0,0,0.1);
+    box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+    font-size: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     cursor: pointer;
 }
-.btn-small.danger { border-color: #dc2626; color: #dc2626; }
-body.dark-mode .btn-small { border-color: rgba(255,255,255,0.2); }
 
-.calendar-day.ghost { pointer-events: none; }
-
-/* 運動類型按鈕 - 皮克敏可愛風格 */
-.type-selector { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 20px; }
-.type-btn {
-    border: none; border-radius: 20px; padding: 12px 5px; color: white;
-    font-size: 12px; font-weight: bold; box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+/* 全螢幕彈窗 Overlay */
+.view-section.overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: var(--bg-color);
+    z-index: 2000;
+    padding: 40px 20px;
+    overflow-y: auto;
+    display: none;
+    flex-direction: column;
+    align-items: center;
+}
+.view-section.overlay.active {
+    display: flex;
 }
 
-/* 運動項目卡片顏色 */
-.card-run { background: rgba(255, 82, 82, 0.15) !important; border-left: 5px solid #FF5252; }
-.card-walk { background: rgba(255, 215, 64, 0.15) !important; border-left: 5px solid #FFD740; }
-.card-climb { background: rgba(68, 138, 255, 0.15) !important; border-left: 5px solid #448AFF; }
-.card-gym { background: rgba(179, 136, 255, 0.15) !important; border-left: 5px solid #B388FF; }
+.close-overlay {
+    position: absolute;
+    top: 20px;
+    right: 20px;
+    background: none;
+    border: none;
+    font-size: 28px;
+    color: var(--text-color);
+    cursor: pointer;
+    z-index: 2001;
+}
+
+/* 月曆擴大與優化 */
+#calendar-view {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+}
+#calendar-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0 20px 10px;
+}
+.month-nav-btn {
+    background: var(--card-bg);
+    border: 1px solid rgba(0,0,0,0.1);
+    border-radius: 12px;
+    width: 60px;
+    height: 50px;
+    font-size: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+}
+#current-month-year {
+    font-size: 22px;
+    margin: 0;
+}
+
+#calendar-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 8px;
+    padding: 10px;
+    flex: 1;
+}
+.calendar-day {
+    aspect-ratio: 0.8 / 1; /* 拉高格子 */
+    background: var(--card-bg);
+    border-radius: 12px;
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px; /* 加大數字 */
+    font-weight: bold;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.08);
+}
+
+/* 運動類型按鈕 - 巨大圓潤 */
+.type-selector {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 20px;
+    width: 100%;
+    max-width: 400px;
+    margin-top: 20px;
+}
+.type-btn {
+    aspect-ratio: 1/1;
+    border: none;
+    border-radius: 40px;
+    color: white;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 8px 15px rgba(0,0,0,0.2);
+    transition: transform 0.2s;
+}
+.type-btn:active { transform: scale(0.95); }
+.type-btn .emoji { font-size: 50px; margin-bottom: 5px; }
+.type-btn .label { font-size: 16px; font-weight: bold; }
+
+/* 表單優化 */
+#workout-form { width: 100%; max-width: 450px; margin-top: 30px; }
+input, select, .save-btn, .ocr-btn {
+    width: 100%;
+    height: 55px; /* 高度 > 50px */
+    border-radius: 15px;
+    border: 1px solid rgba(0,0,0,0.1);
+    padding: 0 15px;
+    font-size: 16px;
+    margin-bottom: 15px;
+    background: var(--card-bg);
+    color: var(--text-color);
+}
+.save-btn {
+    background: var(--accent);
+    color: white;
+    font-weight: bold;
+    border: none;
+    margin-top: 10px;
+    font-size: 18px;
+}
+.ocr-btn {
+    background: #4caf50;
+    color: white;
+    border: none;
+}
+
+/* 運動項目卡片顏色 - 淺色系 */
+.card-run { background: #ffebee !important; color: #b71c1c; border-left: 6px solid #FF5252; }
+.card-walk { background: #fffde7 !important; color: #f57f17; border-left: 6px solid #FFD740; }
+.card-climb { background: #e3f2fd !important; color: #0d47a1; border-left: 6px solid #448AFF; }
+.card-gym { background: #f3e5f5 !important; color: #4a148c; border-left: 6px solid #B388FF; }
+
+body.dark-mode .card-run { background: #311b1b !important; color: #ff8a80; }
+body.dark-mode .card-walk { background: #332f1b !important; color: #ffff8d; }
+body.dark-mode .card-climb { background: #1a237e !important; color: #82b1ff; }
+body.dark-mode .card-gym { background: #311b92 !important; color: #ea80fc; }
+
+/* 底部導航 */
+.bottom-nav {
+    position: fixed; bottom: 0; width: 100%; height: 80px;
+    background: var(--nav-bg); display: flex; justify-content: space-around;
+    align-items: center; border-top: 1px solid rgba(0,0,0,0.1);
+    box-shadow: 0 -2px 15px rgba(0,0,0,0.1); z-index: 1000;
+}
+.nav-item {
+    border: none; background: none; color: #888; font-size: 13px;
+    padding: 10px; border-radius: 20px; transition: 0.3s;
+    text-align: center; flex: 1;
+}
+.nav-item.active { color: var(--accent); font-weight: bold; }
+
+/* 其他修正 */
+.time-group { display: flex; gap: 10px; }
+.time-group input { flex: 1; }
+#day-detail-panel {
+    position: fixed; bottom: 0; left: 0; width: 100%; max-height: 80vh;
+    background: var(--bg-color); border-radius: 30px 30px 0 0;
+    box-shadow: 0 -10px 30px rgba(0,0,0,0.3);
+    padding: 25px; overflow-y: auto; z-index: 1500;
+}
+.panel-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+.panel-header h3 { margin: 0; font-size: 20px; }
+.detail-card { margin-bottom: 15px; padding: 15px; border-radius: 18px; position: relative; }
 
 /* 馬錶警示 */
 .timer-blink { animation: blink-red 0.5s infinite; }

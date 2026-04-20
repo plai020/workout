@@ -86,26 +86,44 @@ function initNavigation() {
   document.querySelectorAll('.nav-item').forEach((btn) => {
     btn.onclick = () => {
       const target = btn.dataset.target;
-      document.querySelectorAll('.view-section').forEach((s) => s.classList.remove('active'));
-      document.querySelectorAll('.nav-item').forEach((n) => n.classList.remove('active'));
-      document.getElementById(target).classList.add('active');
-      btn.classList.add('active');
-      if (target === 'stats-view') updateCharts();
+      openOverlay(target);
     };
   });
+}
+
+function openOverlay(id) {
+  const overlay = document.getElementById(id);
+  if (!overlay) return;
+  
+  // 如果是新增，重置表單
+  if (id === 'add-view') {
+    const form = document.getElementById('workout-form');
+    form.classList.add('hidden');
+    delete form.dataset.editId;
+  }
+  
+  overlay.classList.add('active');
+  if (id === 'stats-view') updateCharts();
+}
+
+function closeOverlay(id) {
+  const overlay = document.getElementById(id);
+  if (overlay) overlay.classList.remove('active');
 }
 
 function initCalendarNav() {
   const prev = document.getElementById('prev-month');
   const next = document.getElementById('next-month');
   if (prev) {
-    prev.onclick = () => {
+    prev.onclick = (e) => {
+      e.stopPropagation();
       viewDate = new Date(viewDate.getFullYear(), viewDate.getMonth() - 1, 1);
       renderCalendar();
     };
   }
   if (next) {
-    next.onclick = () => {
+    next.onclick = (e) => {
+      e.stopPropagation();
       viewDate = new Date(viewDate.getFullYear(), viewDate.getMonth() + 1, 1);
       renderCalendar();
     };
@@ -231,7 +249,7 @@ function summaryLine(r) {
   if (r.distance != null) parts.push(`${r.distance} km`);
   if (r.hours || r.minutes) parts.push(`${r.hours || 0}時${r.minutes || 0}分`);
   if (r.type === 'walk' && r.steps != null) parts.push(`${r.steps} 步`);
-  if (r.type === 'climb' && r.up != null) parts.push(`上升 ${r.up}m`);
+  if (r.ascent != null) parts.push(`爬升 ${r.ascent}m`);
   return parts.join(' · ') || '—';
 }
 
@@ -255,10 +273,7 @@ function editRecord(id) {
   const r = records.find((x) => x.id === id);
   if (!r) return;
 
-  document.querySelectorAll('.nav-item').forEach((n) => n.classList.remove('active'));
-  document.querySelectorAll('.view-section').forEach((s) => s.classList.remove('active'));
-  document.getElementById('add-view').classList.add('active');
-  document.querySelector('.nav-item[data-target="add-view"]')?.classList.add('active');
+  openOverlay('add-view');
 
   currentFormType = r.type;
   const form = document.getElementById('workout-form');
@@ -290,13 +305,34 @@ function editRecord(id) {
     if (dist) dist.value = r.distance ?? '';
     if (hr) hr.value = r.hours ?? '';
     if (mn) mn.value = r.minutes ?? '';
+    
+    if (r.type === 'run') {
+      const pace = document.getElementById('f-avg-pace');
+      const speed = document.getElementById('f-avg-speed');
+      const maxS = document.getElementById('f-max-speed');
+      const asc = document.getElementById('f-ascent');
+      const des = document.getElementById('f-descent');
+      const alt = document.getElementById('f-max-alt');
+      if (pace) pace.value = r.avgPace ?? '';
+      if (speed) speed.value = r.avgSpeed ?? '';
+      if (maxS) maxS.value = r.maxSpeed ?? '';
+      if (asc) asc.value = r.ascent ?? '';
+      if (des) des.value = r.descent ?? '';
+      if (alt) alt.value = r.maxAlt ?? '';
+    }
     if (r.type === 'walk') {
       const st = document.getElementById('f-steps');
       if (st) st.value = r.steps ?? '';
     }
     if (r.type === 'climb') {
-      const up = document.getElementById('f-up');
-      if (up) up.value = r.up ?? '';
+      const speed = document.getElementById('f-avg-speed');
+      const elev = document.getElementById('f-elev-gain');
+      const asc = document.getElementById('f-ascent');
+      const des = document.getElementById('f-descent');
+      if (speed) speed.value = r.avgSpeed ?? '';
+      if (elev) elev.value = r.elevGain ?? '';
+      if (asc) asc.value = r.ascent ?? '';
+      if (des) des.value = r.descent ?? '';
     }
   }
 
@@ -335,7 +371,7 @@ function renderFields(type) {
       <input type="number" id="f-sets" placeholder="組數" min="0" step="1">
       <input type="number" id="f-reps" placeholder="次數" min="0" step="1">
       <input type="number" id="f-seconds" placeholder="秒數 (選填)" min="0" step="1">
-      <button type="button" onclick="openTimer()">⏱️ 開啟馬錶</button>
+      <button type="button" class="timer-btn" onclick="openTimer()">⏱️ 開啟馬錶</button>
     `;
   } else {
     html += `
@@ -345,8 +381,27 @@ function renderFields(type) {
         <input type="number" id="f-min" placeholder="分" min="0" max="59" step="1">
       </div>
     `;
-    if (type === 'walk') html += `<input type="number" id="f-steps" placeholder="步數" min="0" step="1">`;
-    if (type === 'climb') html += `<input type="number" id="f-up" placeholder="上升公尺" min="0" step="1">`;
+    if (type === 'run') {
+      html += `
+        <input type="number" step="0.01" id="f-avg-pace" placeholder="平均配速 (min/km)">
+        <input type="number" step="0.1" id="f-avg-speed" placeholder="平均速度 (km/h)">
+        <input type="number" step="0.1" id="f-max-speed" placeholder="最快速度 (km/h)">
+        <input type="number" id="f-ascent" placeholder="累計爬升 (m)">
+        <input type="number" id="f-descent" placeholder="累計下降 (m)">
+        <input type="number" id="f-max-alt" placeholder="最高海拔 (m)">
+      `;
+    }
+    if (type === 'walk') {
+      html += `<input type="number" id="f-steps" placeholder="步數" min="0" step="1">`;
+    }
+    if (type === 'climb') {
+      html += `
+        <input type="number" step="0.1" id="f-avg-speed" placeholder="平均速度 (km/h)">
+        <input type="number" id="f-elev-gain" placeholder="高度落差 (m)">
+        <input type="number" id="f-ascent" placeholder="累計爬升 (m)">
+        <input type="number" id="f-descent" placeholder="累計下降 (m)">
+      `;
+    }
   }
   container.innerHTML = html;
   if (type === 'gym') {
@@ -379,10 +434,18 @@ function loadLastGymData() {
   const wEl = document.getElementById('f-weight');
   const sEl = document.getElementById('f-sets');
   const rEl = document.getElementById('f-reps');
+  const secEl = document.getElementById('f-seconds');
   if (!partEl || !actEl || !wEl || !sEl || !rEl) return;
 
   const part = partEl.value.trim();
   const action = actEl.value.trim();
+  
+  // 先清空，再填入（或不填）
+  wEl.value = '';
+  sEl.value = '';
+  rEl.value = '';
+  if (secEl) secEl.value = '';
+
   if (!part || !action) return;
 
   const candidates = records
@@ -400,7 +463,6 @@ function loadLastGymData() {
   if (last.weight != null) wEl.value = last.weight;
   if (last.sets != null) sEl.value = last.sets;
   if (last.reps != null) rEl.value = last.reps;
-  const secEl = document.getElementById('f-seconds');
   if (secEl && last.seconds != null) secEl.value = last.seconds;
 }
 
@@ -432,8 +494,23 @@ function initWorkoutFormSubmit() {
       rec.distance = numOrNull(document.getElementById('f-dist')?.value, 2);
       rec.hours = numOrNull(document.getElementById('f-hr')?.value);
       rec.minutes = numOrNull(document.getElementById('f-min')?.value);
-      if (currentFormType === 'walk') rec.steps = numOrNull(document.getElementById('f-steps')?.value);
-      if (currentFormType === 'climb') rec.up = numOrNull(document.getElementById('f-up')?.value);
+      if (currentFormType === 'run') {
+        rec.avgPace = numOrNull(document.getElementById('f-avg-pace')?.value, 2);
+        rec.avgSpeed = numOrNull(document.getElementById('f-avg-speed')?.value, 1);
+        rec.maxSpeed = numOrNull(document.getElementById('f-max-speed')?.value, 1);
+        rec.ascent = numOrNull(document.getElementById('f-ascent')?.value);
+        rec.descent = numOrNull(document.getElementById('f-descent')?.value);
+        rec.maxAlt = numOrNull(document.getElementById('f-max-alt')?.value);
+      }
+      if (currentFormType === 'walk') {
+        rec.steps = numOrNull(document.getElementById('f-steps')?.value);
+      }
+      if (currentFormType === 'climb') {
+        rec.avgSpeed = numOrNull(document.getElementById('f-avg-speed')?.value, 1);
+        rec.elevGain = numOrNull(document.getElementById('f-elev-gain')?.value);
+        rec.ascent = numOrNull(document.getElementById('f-ascent')?.value);
+        rec.descent = numOrNull(document.getElementById('f-descent')?.value);
+      }
     }
 
     if (editId) {
@@ -444,6 +521,7 @@ function initWorkoutFormSubmit() {
     persistRecords();
     form.reset();
     form.classList.add('hidden');
+    closeOverlay('add-view');
     renderCalendar();
     updateCharts();
     alert('已儲存');
@@ -487,28 +565,21 @@ function initOcrUpload() {
 }
 
 function applyOcrNumbers(text) {
-  const normalized = text.replace(/,/g, ' ');
-  const decimals = [...normalized.matchAll(/\d+\.\d+/g)].map((m) => m[0]);
-  const ints = [...normalized.matchAll(/\b\d{3,}\b/g)].map((m) => m[0]);
-
-  const distEl = document.getElementById('f-dist');
-  const stepsEl = document.getElementById('f-steps');
-
-  if (distEl && decimals.length) {
-    distEl.value = decimals[0];
-  }
-  if (stepsEl && ints.length) {
-    const big = ints.map(Number).sort((a, b) => b - a)[0];
-    if (big >= 100) stepsEl.value = String(big);
-  }
-  if (distEl && !distEl.value) {
-    const km = normalized.match(/(\d+(?:\.\d+)?)\s*km/i);
-    if (km) distEl.value = km[1];
-  }
-  if (stepsEl && !stepsEl.value) {
-    const st = normalized.match(/steps?\s*[:\s]?\s*(\d{3,})/i);
-    if (st) stepsEl.value = st[1];
-  }
+  // 提取所有數字 (包含小數)
+  const matches = text.match(/\d+(\.\d+)?/g);
+  if (!matches) return;
+  
+  const numbers = matches.map(m => m);
+  
+  // 獲取目前表單中所有的數字輸入框
+  const inputs = document.querySelectorAll('#workout-form input[type="number"]');
+  
+  // 依序填入
+  inputs.forEach((input, index) => {
+    if (numbers[index] != null) {
+      input.value = numbers[index];
+    }
+  });
 }
 
 // --- 馬錶 ---
@@ -526,15 +597,25 @@ function startTimer(sec) {
   clearInterval(timer);
   let r = Math.floor(n);
   const display = document.getElementById('timer-display');
+  const modalContent = document.querySelector('.modal-content');
+  
   if (display) display.innerText = `${Math.floor(r / 60)}:${(r % 60).toString().padStart(2, '0')}`;
+  modalContent?.classList.remove('timer-blink'); // 重置
+  
   timer = setInterval(() => {
     r--;
     if (display) display.innerText = `${Math.floor(r / 60)}:${(r % 60).toString().padStart(2, '0')}`;
     if (r <= 0) {
       clearInterval(timer);
-      document.querySelector('.modal-content')?.classList.add('timer-blink');
-      setTimeout(() => document.querySelector('.modal-content')?.classList.remove('timer-blink'), 5000);
-      alert('時間到！休息結束 💪');
+      modalContent?.classList.add('timer-blink');
+      // 視覺回饋：強烈閃爍 + 震動 (如果支援)
+      if (window.navigator.vibrate) window.navigator.vibrate([200, 100, 200]);
+      
+      // 彈窗提示，使用者點擊後才停止閃爍
+      setTimeout(() => {
+        alert('時間到！休息結束 💪');
+        modalContent?.classList.remove('timer-blink');
+      }, 10);
     }
   }, 1000);
 }
@@ -680,6 +761,11 @@ function addGymAction() {
   document.getElementById('new-part').value = '';
   document.getElementById('new-action').value = '';
   renderGymManageList();
+  
+  // 立即更新新增表單中的選單
+  if (currentFormType === 'gym') {
+    renderFields('gym');
+  }
 }
 
 function renderGymManageList() {
@@ -695,6 +781,7 @@ function renderGymManageList() {
       gymActions.splice(idx, 1);
       persistGymActions();
       renderGymManageList();
+      if (currentFormType === 'gym') renderFields('gym');
     };
     li.appendChild(del);
     ul.appendChild(li);
