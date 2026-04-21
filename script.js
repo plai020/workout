@@ -659,13 +659,12 @@ function initOcrUpload() {
           const { data } = await Tesseract.recognize(img, 'eng+chi_tra', { logger: () => {} });
           
           // 頂部過濾邏輯：排除高度前 12% 區域
-          const filteredLines = data.lines.filter(line => {
-            const lineTop = line.bbox.y0;
-            return lineTop > (img.height * 0.12);
+          const filteredWords = data.words.filter(word => {
+            const wordTop = word.bbox.y0;
+            return wordTop > (img.height * 0.12);
           });
           
-          const text = filteredLines.map(l => l.text).join(' ');
-          smartOCR(text);
+          smartOCR(filteredWords, img.height); // 傳遞過濾後的單詞數據和圖片高度
           if (status) status.textContent = '智慧辨識完成，已自動填充欄位。';
         };
       };
@@ -680,15 +679,15 @@ function initOcrUpload() {
 }
 
 /**
- * V4.1: 日期自動偵測
+ * V4.3: 日期自動偵測
  * 尋找 YYYY/MM/DD 或 YYYY年MM月DD日 格式
  */
 function detectDate(text) {
-  const regex = /(\d{4}[\/\-年]\d{1,2}[\/\-月]\d{1,2}日?)/;
+  const regex = /(\d{4}[\/年]\d{1,2}[\/月]\d{1,2})/; // YYYY/MM/DD or YYYY年MM月DD
   const match = text.match(regex);
   if (match) {
-    let dateStr = match[0].replace(/年|月/g, '-').replace(/日/g, '');
-    const parts = dateStr.split(/[\/\-]/);
+    let dateStr = match[0].replace(/年|月/g, '-').replace(/\//g, '-'); // Normalize to YYYY-MM-DD
+    const parts = dateStr.split('-');
     if (parts.length === 3) {
       const y = parts[0];
       const m = parts[1].padStart(2, '0');
@@ -743,138 +742,234 @@ function smartOCR(text) {
   if (overlay) overlay.style.backgroundColor = colors[workoutType] || '';
   document.body.style.backgroundColor = colors[workoutType] || '';
 
-  // 3. 關鍵字錨點法 (Keyword Anchoring)
+  // 3. 雷達掃描模式 (Radar Scan Mode)
   let successCount = 0;
-  const tokens = text.split(/\s+/); // 將文本拆分為單詞/標記
 
   /**
-   * 輔助函數：在關鍵字附近尋找數字/時間
-   * @param {string} keyword 關鍵字
-   * @param {string} type 'num' | 'time' | 'int'
-   * @param {string} direction 'before' | 'after' (預設 after)
+   * 輔助函數：在關鍵字附近尋找數值 (基於單詞的空間位置)
+   * @param {Array} allWords - Tesseract 單詞數據 (每個單詞有 .text 和 .bbox)。
+   * @param {string|Array<string>} keywords - 要搜尋的關鍵字。
+   * @param {string} valueType - 'num' (浮點數), 'int' (整數), 'time' (時間格式)。
+   * @param {object} options - { searchDirection: 'above'|'below'|'left_right', maxDistance: number (像素) }
+   * @returns {string|null} 找到的數值。
    */
-  const findNear = (keyword, type = 'num', direction = 'after') => {
-    const idx = tokens.findIndex(t => t.toLowerCase().includes(keyword.toLowerCase()));
-    if (idx === -1) return null;
+  const findValueSpatially = (allWords, keywords, valueType, options = {}) => {
+    const { searchDirection = 'left_right', maxDistance = 100 } = options; // maxDistance in pixels
 
-    // 搜尋範圍：前後 3 個 token
-    const range = 3;
-    const start = direction === 'after' ? idx + 1 : Math.max(0, idx - range);
-    const end = direction === 'after' ? Math.min(tokens.length, idx + 1 + range) : idx;
-    
-    const searchArea = tokens.slice(start, end);
-    if (direction === 'before') searchArea.reverse(); // 向前找時從最近的開始
+    const keywordRegex = new RegExp(Array.isArray(keywords) ? keywords.join('|') : keywords, 'i');
+    const valueRegex = valueType === 'num' ? /\d+(\.\d+)?/ : valueType === 'int' ? /^\d+$/ : /\d{1,2}:\d{2}(?::\d{2})?/;
 
-    const regex = {
-      num: /\d+(\.\d+)/,
-      time: /\d{1,2}:\d{2}(?::\d{2})?/,
-      int: /^\d+$/
-    };
+    let bestMatch = null;
+    let minDistance = Infinity;
 
-    for (const token of searchArea) {
-      const match = token.match(regex[type] || regex.num);
-      if (match) return match[0];
+    for (let i = 0; i < allWords.length; i++) {
+      const currentWord = allWords[i];
+      const keywordMatch = currentWord.text.match(keywordRegex);
+
+      if (keywordMatch) {
+        const keywordBbox = currentWord.bbox;
+
+        for (let j = 0; j < allWords.length; j++) {
+          if (i === j) continue; // 不與自身比較
+
+          const potentialValueWord = allWords[j];
+          const valueMatch = potentialValueWord.text.match(valueRegex);
+
+          if (valueMatch) {
+            const valueBbox = potentialValueWord.bbox;
+
+            let distance = Infinity;
+            let isDirectionMatch = false;
+
+            // 根據方向計算距離
+            if (searchDirection === 'left_right') {
+              // 檢查是否大致在同一水平線上
+              if (Math.abs(keywordBbox.y0 - valueBbox.y0) < keywordBbox.height / 2) {
+                if (valueBbox.x0 > keywordBbox.x1) { // 數值在關鍵字右側
+                  distance = valueBbox.x0 - keywordBbox.x1;
+                  isDirectionMatch = true;
+                } else if (valueBbox.x1 < keywordBbox.x0) { // 數值在關鍵字左側
+                  distance = keywordBbox.x0 - valueBbox.x1;
+                  isDirectionMatch = true;
+                }
+              }
+            } else if (searchDirection === 'above') {
+              // 檢查數值是否在關鍵字上方
+              if (valueBbox.y1 < keywordBbox.y0) {
+                distance = keywordBbox.y0 - valueBbox.y1;
+                isDirectionMatch = true;
+              }
+            } else if (searchDirection === 'below') {
+              // 檢查數值是否在關鍵字下方
+              if (valueBbox.y0 > keywordBbox.y1) {
+                distance = valueBbox.y0 - keywordBbox.y1;
+                isDirectionMatch = true;
+              }
+            }
+
+            if (isDirectionMatch && distance < minDistance && distance <= maxDistance) {
+              minDistance = distance;
+              bestMatch = valueMatch[0];
+            }
+          }
+        }
+      }
     }
-    return null;
+    return bestMatch;
   };
 
+  // Running App 專屬雷達 (圖 1)
   if (appType === 'Running App') {
-    // 距離：Distance 關鍵字，通常數字在「上方」(OCR 讀取可能在 Distance 之前或之後)
-    const dist = findNear('Distance', 'num', 'before') || findNear('Distance', 'num', 'after');
+    // 距離：尋找關鍵字 Distance 或 (km)，抓取其上方或左右最接近的浮點數
+    let dist = findValueSpatially(text, ['Distance', '(km)'], 'num', { searchDirection: 'above' });
+    if (!dist) dist = findValueSpatially(text, ['Distance', '(km)'], 'num', { searchDirection: 'left_right' });
     if (dist) { document.getElementById('f-dist').value = dist; successCount++; }
 
-    // 時/分/秒：Duration 關鍵字
-    const duration = findNear('Duration', 'time', 'before') || findNear('Duration', 'time', 'after');
-    if (duration) {
-      const parts = duration.split(':');
-      if (parts.length === 3) {
+    // 時/分：尋找 Duration 或格式 \d{2}:\d{2}:\d{2}。
+    let durationTime = findValueSpatially(text, 'Duration', 'time', { searchDirection: 'left_right' });
+    if (!durationTime) durationTime = findValueSpatially(text, 'Duration', 'time', { searchDirection: 'below' });
+    if (durationTime) {
+      const parts = durationTime.split(':');
+      if (parts.length === 3) { // XX:XX:XX
+        document.getElementById('f-hr').value = parseInt(parts[0]);
+        document.getElementById('f-min').value = parseInt(parts[1]);
+        successCount++;
+      } else if (parts.length === 2) { // XX:XX (可能是配速，但這裡優先處理時分)
+        document.getElementById('f-hr').value = parseInt(parts[0]);
+        document.getElementById('f-min').value = parseInt(parts[1]);
+        successCount++;
+      }
+    } else {
+      // Fallback: 在整個文本中尋找任何 XX:XX:XX 格式的時間
+      const fullTextForTime = text.map(w => w.text).join(' ');
+      const match = fullTextForTime.match(/\d{2}:\d{2}:\d{2}/);
+      if (match) {
+        const parts = match[0].split(':');
         document.getElementById('f-hr').value = parseInt(parts[0]);
         document.getElementById('f-min').value = parseInt(parts[1]);
         successCount++;
       }
     }
 
-    // 平均配速：Average Pace 關鍵字
-    const pace = findNear('Pace', 'time', 'after');
+    // 平均配速：搜尋 Average Pace 抓取 XX:XX
+    const pace = findValueSpatially(text, ['Average Pace', 'Pace'], 'time', { searchDirection: 'left_right' });
     if (pace) { document.getElementById('f-avg-pace').value = pace; successCount++; }
 
-    // 平均速度：Average Speed 關鍵字
-    const avgSpeed = findNear('Speed', 'num', 'after');
+    // 平均速度：搜尋 Average Speed 抓取後方第一個數字
+    const avgSpeed = findValueSpatially(text, ['Average Speed', 'Speed'], 'num', { searchDirection: 'left_right' });
     if (avgSpeed) { document.getElementById('f-avg-speed').value = avgSpeed; successCount++; }
 
-    // 最高速度：Max. Speed 關鍵字
-    const maxSpeed = findNear('Max', 'num', 'after');
+    // 最快速度：搜尋 Max. Speed 抓取後方第一個數字
+    const maxSpeed = findValueSpatially(text, ['Max. Speed', 'Max Speed'], 'num', { searchDirection: 'left_right' });
     if (maxSpeed) { document.getElementById('f-max-speed').value = maxSpeed; successCount++; }
 
-    // 累計爬升/下降
-    const gain = findNear('Gain', 'int', 'after');
-    if (gain) { document.getElementById('f-ascent').value = gain; successCount++; }
-    const loss = findNear('Loss', 'int', 'after');
-    if (loss) { document.getElementById('f-descent').value = loss; successCount++; }
-
-    // 最高海拔
-    const maxAlt = findNear('Elevation', 'int', 'after');
-    if (maxAlt) { document.getElementById('f-max-alt').value = maxAlt; successCount++; }
-  } 
-  else if (appType === 'Hikingbook') {
-    // 距離：尋找「距離」
-    const dist = findNear('距離', 'num', 'after');
-    if (dist) { document.getElementById('f-dist').value = dist; successCount++; }
-
-    // 時/分：尋找「時」與「分」
-    const hr = findNear('時', 'int', 'before');
-    const min = findNear('分', 'int', 'before');
-    if (hr) { document.getElementById('f-hr').value = hr; successCount++; }
-    if (min) { document.getElementById('f-min').value = min; successCount++; }
-
-    // 平均速度
-    const speed = findNear('平均速度', 'num', 'after');
-    if (speed) { document.getElementById('f-avg-speed').value = speed; successCount++; }
-
-    // 累計爬升/下降
-    const ascent = findNear('總爬升', 'int', 'after');
+    // 累計爬升：搜尋 Elevation Gain 抓取後方第一個數字
+    const ascent = findValueSpatially(text, ['Elevation Gain', 'Gain'], 'int', { searchDirection: 'left_right' });
     if (ascent) { document.getElementById('f-ascent').value = ascent; successCount++; }
-    const descent = findNear('總下降', 'int', 'after');
+
+    // 累計下降：搜尋 Elevation Loss 抓取後方第一個數字
+    const descent = findValueSpatially(text, ['Elevation Loss', 'Loss'], 'int', { searchDirection: 'left_right' });
     if (descent) { document.getElementById('f-descent').value = descent; successCount++; }
 
-    // 高度落差 (倒數第3個數字和倒數第2個數字的差額)
-    const allInts = text.match(/\d+/g) || [];
-    if (allInts.length >= 3) {
-      const maxAlt = parseInt(allInts[allInts.length - 3]);
-      const minAlt = parseInt(allInts[allInts.length - 2]);
+    // 最高海拔：搜尋 Max. Elevation 抓取後方第一個數字
+    const maxAlt = findValueSpatially(text, ['Max. Elevation', 'Max Elevation'], 'int', { searchDirection: 'left_right' });
+    if (maxAlt) { document.getElementById('f-max-alt').value = maxAlt; successCount++; }
+  } 
+  // Hikingbook 專屬雷達 (圖 2)
+  else if (appType === 'Hikingbook') {
+    // 距離：尋找 距離 字樣，抓取其下方的數字
+    const dist = findValueSpatially(words, '距離', 'num', { searchDirection: 'below' });
+    if (dist) { document.getElementById('f-dist').value = dist; successCount++; }
+
+    // 時：搜尋 時，抓取其前方的整數
+    const hr = findValueSpatially(words, '時', 'int', { searchDirection: 'left_right' });
+    if (hr) { document.getElementById('f-hr').value = hr; successCount++; }
+
+    // 分：搜尋 分，抓取其前方的整數
+    const min = findValueSpatially(words, '分', 'int', { searchDirection: 'left_right' });
+    if (min) { document.getElementById('f-min').value = min; successCount++; }
+
+    // 平均速度：尋找 平均速度 字樣，抓取其下方的數字
+    const avgSpeed = findValueSpatially(words, '平均速度', 'num', { searchDirection: 'below' });
+    if (avgSpeed) { document.getElementById('f-avg-speed').value = avgSpeed; successCount++; }
+
+    // 累計爬升：搜尋 總爬升 ，抓取下方的數字
+    const ascent = findValueSpatially(words, '總爬升', 'int', { searchDirection: 'below' });
+    if (ascent) { document.getElementById('f-ascent').value = ascent; successCount++; }
+
+    // 累計下降： 搜尋 總下降， 抓取下方的數字
+    const descent = findValueSpatially(words, '總下降', 'int', { searchDirection: 'below' });
+    if (descent) { document.getElementById('f-descent').value = descent; successCount++; }
+
+    // 高度落差：尋找 倒數第3個數字和倒數第2個數字，將倒數第3個數字減倒數第2個數字得出。
+    const allNumbersInText = fullText.match(/\d+/g) || [];
+    if (allNumbersInText.length >= 3) {
+      const maxAlt = parseInt(allNumbersInText[allNumbersInText.length - 3]);
+      const minAlt = parseInt(allNumbersInText[allNumbersInText.length - 2]);
       if (!isNaN(maxAlt) && !isNaN(minAlt)) {
         document.getElementById('f-elev-gain').value = maxAlt - minAlt;
         successCount++;
       }
     }
   }
+  // Pacer 專屬雷達 (圖 3)
   else if (appType === 'Pacer') {
-    // 距離：尋找「公里」
-    const dist = findNear('公里', 'num', 'after');
+    // 距離：搜尋 公里，抓取下方的數字
+    const dist = findValueSpatially(words, '公里', 'num', { searchDirection: 'below' });
     if (dist) { document.getElementById('f-dist').value = dist; successCount++; }
 
-    // 時/分：尋找「h」與「m」
-    const hr = findNear('h', 'int', 'before');
-    const min = findNear('m', 'int', 'before');
+    // 時：搜尋 h，抓取前方的數字
+    const hr = findValueSpatially(words, 'h', 'int', { searchDirection: 'left_right' });
     if (hr) { document.getElementById('f-hr').value = hr; successCount++; }
+
+    // 分：搜尋 m，抓取前方的數字
+    const min = findValueSpatially(words, 'm', 'int', { searchDirection: 'left_right' });
     if (min) { document.getElementById('f-min').value = min; successCount++; }
 
-    // 步數：最大的 4-5 位數
-    const allNums = text.match(/\d+/g) || [];
-    const steps = allNums.find(n => n.length >= 4 && n.length <= 6);
+    // 步數：尋找字體最大或位於 步數目標 上方的 4-5 位數整數。
+    let steps = findValueSpatially(words, '步數目標', 'int', { searchDirection: 'above' });
+    if (!steps) {
+      const allNums = fullText.match(/\d+/g) || [];
+      let maxSteps = 0;
+      for (const numStr of allNums) {
+        if (numStr.length >= 4 && numStr.length <= 6) {
+          const num = parseInt(numStr);
+          if (num > maxSteps) {
+            maxSteps = num;
+          }
+        }
+      }
+      if (maxSteps > 0) steps = maxSteps.toString();
+    }
     if (steps) {
       document.getElementById('f-steps').value = steps;
       successCount++;
     }
   }
 
-  // 4. 錯誤處理
+  // 4. 容錯處理
   if (successCount < 1) {
     if (status) status.textContent = '辨識結果不完整，請手動校對。';
     if (status) status.style.color = 'red';
   } else {
-    if (status) status.textContent = `已偵測到 [${appType}] 數據，已自動填入。`;
-    if (status) status.style.color = 'inherit';
+    // 檢查關鍵欄位 (距離、時、分) 是否為 0 或 null
+    const keyFields = ['f-dist', 'f-hr', 'f-min'];
+    let hasZeroOrNull = false;
+    for (const fieldId of keyFields) {
+      const el = document.getElementById(fieldId);
+      if (el && (el.value === '' || parseFloat(el.value) === 0)) {
+        hasZeroOrNull = true;
+        break;
+      }
+    }
+
+    if (hasZeroOrNull) {
+      if (status) status.textContent = '偵測到部分欄位偏移，請檢查距離與時間。';
+      if (status) status.style.color = 'orange';
+    } else {
+      if (status) status.textContent = `已偵測到 [${appType}] 數據，已自動填入。`;
+      if (status) status.style.color = 'inherit';
+    }
     alert(`已偵測到 [${appType}] 數據，已自動填入。`);
   }
 }
@@ -887,38 +982,6 @@ function clearFormInputs() {
   const status = document.getElementById('ocr-status');
   if (status) {
     status.textContent = '';
-    status.style.color = 'inherit';
-  }
-}
-
-function applyOcrNumbers(text) {
-  const status = document.getElementById('ocr-status');
-  const matches = text.match(/\d+(\.\d+)?/g);
-  if (!matches || matches.length < 2) {
-    if (status) {
-        status.textContent = '辨識結果不完整，請手動校對。';
-        status.style.color = 'red';
-    }
-    return;
-  }
-  
-  const numbers = matches.map(m => m);
-  const distEl = document.getElementById('f-dist');
-  const otherInputs = Array.from(document.querySelectorAll('#workout-form input[type="number"]'))
-    .filter(i => i.id !== 'f-dist' && i.id !== 'f-date');
-  let numIdx = 0;
-  if (distEl && numbers[numIdx]) {
-    distEl.value = numbers[numIdx];
-    numIdx++;
-  }
-  otherInputs.forEach((input) => {
-    if (numbers[numIdx] != null) {
-      input.value = numbers[numIdx];
-      numIdx++;
-    }
-  });
-  if (status) {
-    status.textContent = '智慧辨識完成，已自動填充欄位。';
     status.style.color = 'inherit';
   }
 }
