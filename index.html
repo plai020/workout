@@ -121,7 +121,7 @@
             <button onclick="startTimer(120)">120s</button>
         </div>
         <div class="timer-custom-input">
-            <input type="number" id="manual-timer-sec" placeholder="輸入秒數 (如: 45)">
+            <input type="number" id="manual-timer-sec" placeholder="輸入秒數 (如: 45)" step="0.01">
             <button onclick="startTimer(document.getElementById('manual-timer-sec').value)" class="manual-timer-btn">啟動</button>
         </div>
         <button onclick="closeTimer()" class="close-timer-btn">結束並關閉</button>

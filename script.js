@@ -107,6 +107,7 @@ function openOverlay(id, btn = null) {
     const selector = document.getElementById('add-type-selector');
     const form = document.getElementById('workout-form');
     selector.classList.remove('hidden');
+    selector.style.display = 'grid'; // 確保大按鈕區塊可見
     form.classList.add('hidden');
     delete form.dataset.editId;
   }
@@ -315,7 +316,7 @@ function editRecord(id) {
   openOverlay('add-view');
   
   const selector = document.getElementById('add-type-selector');
-  selector.classList.add('hidden'); // 編輯時隱藏大按鈕
+  selector.style.display = 'none'; // 編輯時隱藏大按鈕
 
   currentFormType = r.type;
   const form = document.getElementById('workout-form');
@@ -323,8 +324,8 @@ function editRecord(id) {
   form.classList.remove('hidden');
   renderFields(r.type);
   
-  // 背景連動
-  const colors = { run: '#FFEBEE', walk: '#FFFDE7', climb: '#E3F2FD', gym: '#F3E5F5' };
+  // 背景連動 (V3.9 更新)
+  const colors = { run: '#ffebee', walk: '#fff9c4', climb: '#e3f2fd', gym: '#f3e5f5' };
   document.body.style.backgroundColor = colors[r.type] || '';
 
   const dateEl = document.getElementById('f-date');
@@ -400,14 +401,14 @@ function initForm() {
       const type = btn.dataset.type;
       currentFormType = type;
       
-      // 動態切換邏輯
-      selector.classList.add('hidden');
+      // 動態切換邏輯 (V3.9 更新：完全隱藏大按鈕)
+      selector.style.display = 'none';
       form.className = `active-form-${type}`;
       form.classList.remove('hidden');
       renderFields(type);
       
-      // 背景連動
-      const colors = { run: '#FFEBEE', walk: '#FFFDE7', climb: '#E3F2FD', gym: '#F3E5F5' };
+      // 背景連動 (V3.9 更新)
+      const colors = { run: '#ffebee', walk: '#fff9c4', climb: '#e3f2fd', gym: '#f3e5f5' };
       document.body.style.backgroundColor = colors[type] || '';
     };
   });
@@ -423,7 +424,7 @@ function renderFields(type) {
     html += `
       <select id="f-gym-part" onchange="updateActions()">${parts.map((p) => `<option value="${escapeAttr(p)}">${escapeHtml(p)}</option>`).join('')}</select>
       <select id="f-gym-action" onchange="loadLastGymData()"></select>
-      <input type="number" id="f-weight" placeholder="重量 (kg)" step="0.5" min="0">
+      <input type="number" id="f-weight" placeholder="重量 (kg)" step="0.01" min="0">
       <input type="number" id="f-sets" placeholder="組數" min="0" step="1">
       <input type="number" id="f-reps" placeholder="次數" min="0" step="1">
       <input type="number" id="f-seconds" placeholder="秒數 (選填)" min="0" step="1">
@@ -441,11 +442,11 @@ function renderFields(type) {
     if (type === 'run') {
       html += `
         <input type="text" id="f-avg-pace" placeholder="平均配速 (如 07:17)" oninput="formatPace(this)">
-        <input type="number" step="0.1" id="f-avg-speed" placeholder="平均速度 (km/h)">
-        <input type="number" step="0.1" id="f-max-speed" placeholder="最快速度 (km/h)">
-        <input type="number" id="f-ascent" placeholder="累計爬升 (m)">
-        <input type="number" id="f-descent" placeholder="累計下降 (m)">
-        <input type="number" id="f-max-alt" placeholder="最高海拔 (m)">
+        <input type="number" step="0.01" id="f-avg-speed" placeholder="平均速度 (km/h)">
+        <input type="number" step="0.01" id="f-max-speed" placeholder="最快速度 (km/h)">
+        <input type="number" step="0.01" id="f-ascent" placeholder="累計爬升 (m)">
+        <input type="number" step="0.01" id="f-descent" placeholder="累計下降 (m)">
+        <input type="number" step="0.01" id="f-max-alt" placeholder="最高海拔 (m)">
       `;
     }
     if (type === 'walk') {
@@ -453,10 +454,10 @@ function renderFields(type) {
     }
     if (type === 'climb') {
       html += `
-        <input type="number" step="0.1" id="f-avg-speed" placeholder="平均速度 (km/h)">
-        <input type="number" id="f-elev-gain" placeholder="高度落差 (m)">
-        <input type="number" id="f-ascent" placeholder="累計爬升 (m)">
-        <input type="number" id="f-descent" placeholder="累計下降 (m)">
+        <input type="number" step="0.01" id="f-avg-speed" placeholder="平均速度 (km/h)">
+        <input type="number" step="0.01" id="f-elev-gain" placeholder="高度落差 (m)">
+        <input type="number" step="0.01" id="f-ascent" placeholder="累計爬升 (m)">
+        <input type="number" step="0.01" id="f-descent" placeholder="累計下降 (m)">
       `;
     }
   }
@@ -592,7 +593,9 @@ function initWorkoutFormSubmit() {
     
     // 重置背景與顯示
     document.body.style.backgroundColor = '';
-    document.getElementById('add-type-selector').classList.remove('hidden');
+    const selector = document.getElementById('add-type-selector');
+    selector.classList.remove('hidden');
+    selector.style.display = 'grid';
 
     closeOverlay('add-view');
     renderCalendar();
@@ -625,10 +628,28 @@ function initOcrUpload() {
     if (status) status.textContent = '辨識中…';
 
     try {
-      const { data } = await Tesseract.recognize(file, 'eng+chi_tra', { logger: () => {} });
-      const text = data?.text || '';
-      smartOCR(text);
-      if (status) status.textContent = '智慧辨識完成，已自動填充欄位。';
+      // V3.9: 獲取圖片尺寸以進行頂部過濾
+      const img = new Image();
+      const reader = new FileReader();
+      
+      reader.onload = async (e) => {
+        img.src = e.target.result;
+        img.onload = async () => {
+          const { data } = await Tesseract.recognize(img, 'eng+chi_tra', { logger: () => {} });
+          
+          // 頂部過濾邏輯：排除高度前 12% 區域
+          const filteredLines = data.lines.filter(line => {
+            const lineTop = line.bbox.y0;
+            return lineTop > (img.height * 0.12);
+          });
+          
+          const text = filteredLines.map(l => l.text).join(' ');
+          smartOCR(text);
+          if (status) status.textContent = '智慧辨識完成，已自動填充欄位。';
+        };
+      };
+      reader.readAsDataURL(file);
+
     } catch (err) {
       if (status) status.textContent = `辨識失敗：${err.message || err}`;
     } finally {
@@ -657,78 +678,69 @@ function smartOCR(text) {
   const selector = document.getElementById('add-type-selector');
   const form = document.getElementById('workout-form');
   currentFormType = workoutType;
-  selector.classList.add('hidden');
+  selector.style.display = 'none';
   form.className = `active-form-${workoutType}`;
   form.classList.remove('hidden');
   renderFields(workoutType);
-  const colors = { run: '#FFEBEE', walk: '#FFFDE7', climb: '#E3F2FD', gym: '#F3E5F5' };
+  
+  // 背景連動 (V3.9 更新)
+  const colors = { run: '#ffebee', walk: '#fff9c4', climb: '#e3f2fd', gym: '#f3e5f5' };
   document.body.style.backgroundColor = colors[workoutType] || '';
 
-  // 2. 提取數字與時間 (確保時間格式 00:00:00 不被拆散)
-  // 正則說明：\d{1,2}:\d{2}(?::\d{2})? 匹配時分秒或分秒；\d+(\.\d+)? 匹配一般數字
-  const matches = text.match(/\d{1,2}:\d{2}(?::\d{2})?|\d+(\.\d+)?/g) || [];
-  const tokens = matches.map(m => m.trim());
-  console.log(`Detected ${appType} tokens:`, tokens);
+  // 2. 提取所有數字 (V3.9 優化：自動支援大數值與小數)
+  const numbers = text.match(/\d+(\.\d+)?/g) || [];
+  console.log(`Detected ${appType} numbers:`, numbers);
 
-  // 3. 依序填入規則
+  // 3. 執行精準映射 (V3.9 索引對照)
   if (appType === 'Running App') {
-    // 規則：日期, 距離, 時, 分, 秒, 卡路里, 配速, 平均速度, 最高速度, 爬升, 下降, 海拔
-    if (tokens[0]) document.getElementById('f-date').value = formatDateToken(tokens[0]);
-    if (tokens[1]) document.getElementById('f-dist').value = tokens[1];
-    if (tokens[2]) document.getElementById('f-hr').value = tokens[2];
-    if (tokens[3]) document.getElementById('f-min').value = tokens[3];
-    // tokens[4] 為秒，略過或視需求處理
-    // tokens[5] 為卡路里，略過
-    if (tokens[6]) {
-        // tokens[6] 可能是 MM:SS 格式
-        document.getElementById('f-avg-pace').value = tokens[6];
+    // numbers[0] → 距離；numbers[1..3] → 時/分/秒
+    if (numbers[0]) document.getElementById('f-dist').value = numbers[0];
+    if (numbers[1]) document.getElementById('f-hr').value = numbers[1];
+    if (numbers[2]) document.getElementById('f-min').value = numbers[2];
+    // numbers[3] 為秒，略過
+    // numbers[4] → 卡路里
+    // numbers[5..6] → 平均配速 (MM:SS)
+    if (numbers[5] && numbers[6]) {
+        document.getElementById('f-avg-pace').value = `${numbers[5].padStart(2,'0')}:${numbers[6].padStart(2,'0')}`;
     }
-    if (tokens[7]) document.getElementById('f-avg-speed').value = tokens[7];
-    if (tokens[8]) document.getElementById('f-max-speed').value = tokens[8];
-    if (tokens[9]) document.getElementById('f-ascent').value = tokens[9];
-    if (tokens[10]) document.getElementById('f-descent').value = tokens[10];
-    if (tokens[11]) document.getElementById('f-max-alt').value = tokens[11];
+    // numbers[7] → 平均速度；numbers[8] → 最高速度
+    if (numbers[7]) document.getElementById('f-avg-speed').value = numbers[7];
+    if (numbers[8]) document.getElementById('f-max-speed').value = numbers[8];
+    // numbers[9..10] → 步數相關；numbers[11] → 步幅 (略過)
+    // numbers[12..14] → 累計爬升 / 累計下降 / 最高海拔
+    if (numbers[12]) document.getElementById('f-ascent').value = numbers[12];
+    if (numbers[13]) document.getElementById('f-descent').value = numbers[13];
+    if (numbers[14]) document.getElementById('f-max-alt').value = numbers[14];
   } 
   else if (appType === 'Hikingbook') {
-    // 規則：日期, 距離, 時, 分, 總爬升, 總下降, 平均速度, 最高海拔, 最低海拔
-    if (tokens[0]) document.getElementById('f-date').value = formatDateToken(tokens[0]);
-    if (tokens[1]) document.getElementById('f-dist').value = tokens[1];
-    if (tokens[2]) document.getElementById('f-hr').value = tokens[2];
-    if (tokens[3]) document.getElementById('f-min').value = tokens[3];
-    if (tokens[4]) document.getElementById('f-ascent').value = tokens[4];
-    if (tokens[5]) document.getElementById('f-descent').value = tokens[5];
-    if (tokens[6]) document.getElementById('f-avg-speed').value = tokens[6];
-    
-    // 高度落差計算
-    const maxAlt = tokens[7] ? Number(tokens[7]) : 0;
-    const minAlt = tokens[8] ? Number(tokens[8]) : 0;
+    // numbers[0] → 距離；numbers[1..2] → 時/分
+    if (numbers[0]) document.getElementById('f-dist').value = numbers[0];
+    if (numbers[1]) document.getElementById('f-hr').value = numbers[1];
+    if (numbers[2]) document.getElementById('f-min').value = numbers[2];
+    // numbers[3..4] → 總爬升 / 總下降
+    if (numbers[3]) document.getElementById('f-ascent').value = numbers[3];
+    if (numbers[4]) document.getElementById('f-descent').value = numbers[4];
+    // numbers[5] → 平均速度；numbers[6] → 消耗熱量 (略過)
+    if (numbers[5]) document.getElementById('f-avg-speed').value = numbers[5];
+    // numbers[7..8] → 最高/最低海拔
+    const maxAlt = numbers[7] ? Number(numbers[7]) : 0;
+    const minAlt = numbers[8] ? Number(numbers[8]) : 0;
     if (maxAlt && minAlt) {
         document.getElementById('f-elev-gain').value = maxAlt - minAlt;
     }
   }
   else if (appType === 'Pacer') {
-    // 規則：距離, 時, 分, 總步數
-    if (tokens[0]) document.getElementById('f-dist').value = tokens[0];
-    if (tokens[1]) document.getElementById('f-hr').value = tokens[1];
-    if (tokens[2]) document.getElementById('f-min').value = tokens[2];
-    if (tokens[3]) document.getElementById('f-steps').value = tokens[3];
+    // numbers[0] → 大卡；numbers[1..2] → 時/分
+    if (numbers[1]) document.getElementById('f-hr').value = numbers[1];
+    if (numbers[2]) document.getElementById('f-min').value = numbers[2];
+    // numbers[3] → 距離
+    if (numbers[3]) document.getElementById('f-dist').value = numbers[3];
+    // numbers[4] → 日期 (略過)
+    // numbers[5] → 總步數
+    if (numbers[5]) document.getElementById('f-steps').value = numbers[5];
   }
 
   alert(`已偵測到 [${appType}] 數據，已自動填入。`);
-}
-
-/** 輔助：將 YYYY/M/D 格式轉為 YYYY-MM-DD */
-function formatDateToken(token) {
-    if (token.includes('/') || token.includes('-')) {
-        const parts = token.split(/[\/\-]/);
-        if (parts.length === 3) {
-            const y = parts[0];
-            const m = parts[1].padStart(2, '0');
-            const d = parts[2].padStart(2, '0');
-            return `${y}-${m}-${d}`;
-        }
-    }
-    return token;
 }
 
 function clearFormInputs() {
