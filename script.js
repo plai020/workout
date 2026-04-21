@@ -101,14 +101,17 @@ function openOverlay(id, btn = null) {
   
   // 重置背景色
   document.body.style.backgroundColor = '';
+  overlay.style.backgroundColor = '';
 
   // 如果是新增，重置顯示狀態
   if (id === 'add-view') {
     const selector = document.getElementById('add-type-selector');
     const form = document.getElementById('workout-form');
+    const title = document.getElementById('add-view-title');
     selector.classList.remove('hidden');
     selector.style.display = 'grid'; // 確保大按鈕區塊可見
     form.classList.add('hidden');
+    if (title) title.innerText = '新增運動紀錄';
     delete form.dataset.editId;
   }
   
@@ -131,7 +134,10 @@ function openOverlay(id, btn = null) {
 function closeOverlay(id, event = null) {
   if (event) event.stopPropagation(); // 防止事件冒泡觸發月曆點擊
   const overlay = document.getElementById(id);
-  if (overlay) overlay.classList.remove('active');
+  if (overlay) {
+    overlay.classList.remove('active');
+    overlay.style.backgroundColor = '';
+  }
   
   // 重置背景色
   document.body.style.backgroundColor = '';
@@ -324,8 +330,13 @@ function editRecord(id) {
   form.classList.remove('hidden');
   renderFields(r.type);
   
-  // 背景連動 (V3.9 更新)
+  // 標題與背景連動 (V4.1 更新)
+  const title = document.getElementById('add-view-title');
+  if (title) title.innerText = `${typeLabel(r.type)}紀錄編輯`;
+  
   const colors = { run: '#ffebee', walk: '#fff9c4', climb: '#e3f2fd', gym: '#f3e5f5' };
+  const overlay = document.getElementById('add-view');
+  if (overlay) overlay.style.backgroundColor = colors[r.type] || '';
   document.body.style.backgroundColor = colors[r.type] || '';
 
   const dateEl = document.getElementById('f-date');
@@ -401,14 +412,18 @@ function initForm() {
       const type = btn.dataset.type;
       currentFormType = type;
       
-      // 動態切換邏輯 (V3.9 更新：完全隱藏大按鈕)
+      // 動態切換邏輯 (V4.1 更新：標題、背景、隱藏選擇器)
       selector.style.display = 'none';
       form.className = `active-form-${type}`;
       form.classList.remove('hidden');
       renderFields(type);
       
-      // 背景連動 (V3.9 更新)
+      const title = document.getElementById('add-view-title');
+      if (title) title.innerText = `新增${typeLabel(type)}紀錄`;
+      
       const colors = { run: '#ffebee', walk: '#fff9c4', climb: '#e3f2fd', gym: '#f3e5f5' };
+      const overlay = document.getElementById('add-view');
+      if (overlay) overlay.style.backgroundColor = colors[type] || '';
       document.body.style.backgroundColor = colors[type] || '';
     };
   });
@@ -593,6 +608,12 @@ function initWorkoutFormSubmit() {
     
     // 重置背景與顯示
     document.body.style.backgroundColor = '';
+    const overlay = document.getElementById('add-view');
+    if (overlay) overlay.style.backgroundColor = '';
+    
+    const title = document.getElementById('add-view-title');
+    if (title) title.innerText = '新增運動紀錄';
+
     const selector = document.getElementById('add-type-selector');
     selector.classList.remove('hidden');
     selector.style.display = 'grid';
@@ -658,12 +679,43 @@ function initOcrUpload() {
   });
 }
 
+/**
+ * V4.1: 日期自動偵測
+ * 尋找 YYYY/MM/DD 或 YYYY年MM月DD日 格式
+ */
+function detectDate(text) {
+  const regex = /(\d{4}[\/\-年]\d{1,2}[\/\-月]\d{1,2}日?)/;
+  const match = text.match(regex);
+  if (match) {
+    let dateStr = match[0].replace(/年|月/g, '-').replace(/日/g, '');
+    const parts = dateStr.split(/[\/\-]/);
+    if (parts.length === 3) {
+      const y = parts[0];
+      const m = parts[1].padStart(2, '0');
+      const d = parts[2].padStart(2, '0');
+      return `${y}-${m}-${d}`;
+    }
+  }
+  return null;
+}
+
 function smartOCR(text) {
-  // 1. 辨識前置判斷
+  const status = document.getElementById('ocr-status');
+  
+  // 1. 日期偵測與剔除
+  const detectedDate = detectDate(text);
+  if (detectedDate) {
+    const dateEl = document.getElementById('f-date');
+    if (dateEl) dateEl.value = detectedDate;
+    // 從文字中移除已識別的日期，避免干擾後續數字提取
+    text = text.replace(/(\d{4}[\/\-年]\d{1,2}[\/\-月]\d{1,2}日?)/, '');
+  }
+
+  // 2. 辨識 App 類型
   let appType = '';
   if (text.includes('Distance (km)') || text.includes('Average Pace')) appType = 'Running App';
   else if (text.includes('Hikingbook') || text.includes('總爬升')) appType = 'Hikingbook';
-  else if (text.includes('活躍時間') || text.includes('步數目標')) appType = 'Pacer';
+  else if (text.includes('活躍時間') || text.includes('步數目標') || text.includes('Pacer')) appType = 'Pacer';
 
   if (!appType) {
     applyOcrNumbers(text);
@@ -675,72 +727,114 @@ function smartOCR(text) {
   if (appType === 'Hikingbook') workoutType = 'climb';
   if (appType === 'Pacer') workoutType = 'walk';
 
+  currentFormType = workoutType;
   const selector = document.getElementById('add-type-selector');
   const form = document.getElementById('workout-form');
-  currentFormType = workoutType;
   selector.style.display = 'none';
   form.className = `active-form-${workoutType}`;
   form.classList.remove('hidden');
   renderFields(workoutType);
   
-  // 背景連動 (V3.9 更新)
+  const title = document.getElementById('add-view-title');
+  if (title) title.innerText = `新增${typeLabel(workoutType)}紀錄 (OCR)`;
+  
   const colors = { run: '#ffebee', walk: '#fff9c4', climb: '#e3f2fd', gym: '#f3e5f5' };
+  const overlay = document.getElementById('add-view');
+  if (overlay) overlay.style.backgroundColor = colors[workoutType] || '';
   document.body.style.backgroundColor = colors[workoutType] || '';
 
-  // 2. 提取所有數字 (V3.9 優化：自動支援大數值與小數)
-  const numbers = text.match(/\d+(\.\d+)?/g) || [];
-  console.log(`Detected ${appType} numbers:`, numbers);
+  // 3. 特徵提取 (V4.1 重構)
+  
+  // A. 時間格式保護 (XX:XX:XX 或 XX:XX)
+  const timeMatches = text.match(/\d{1,2}:\d{2}(?::\d{2})?/g) || [];
+  
+  // B. 提取所有數字並區分整數與小數
+  const allTokens = text.match(/\d+(\.\d+)?/g) || [];
+  const decimalNums = allTokens.filter(t => t.includes('.'));
+  const integerNums = allTokens.filter(t => !t.includes('.'));
 
-  // 3. 執行精準映射 (V3.9 索引對照)
+  console.log(`[${appType}] Time tokens:`, timeMatches);
+  console.log(`[${appType}] Decimals:`, decimalNums);
+  console.log(`[${appType}] Integers:`, integerNums);
+
+  let successCount = 0;
+
   if (appType === 'Running App') {
-    // numbers[0] → 距離；numbers[1..3] → 時/分/秒
-    if (numbers[0]) document.getElementById('f-dist').value = numbers[0];
-    if (numbers[1]) document.getElementById('f-hr').value = numbers[1];
-    if (numbers[2]) document.getElementById('f-min').value = numbers[2];
-    // numbers[3] 為秒，略過
-    // numbers[4] → 卡路里
-    // numbers[5..6] → 平均配速 (MM:SS)
-    if (numbers[5] && numbers[6]) {
-        document.getElementById('f-avg-pace').value = `${numbers[5].padStart(2,'0')}:${numbers[6].padStart(2,'0')}`;
-    }
-    // numbers[7] → 平均速度；numbers[8] → 最高速度
-    if (numbers[7]) document.getElementById('f-avg-speed').value = numbers[7];
-    if (numbers[8]) document.getElementById('f-max-speed').value = numbers[8];
-    // numbers[9..10] → 步數相關；numbers[11] → 步幅 (略過)
-    // numbers[12..14] → 累計爬升 / 累計下降 / 最高海拔
-    if (numbers[12]) document.getElementById('f-ascent').value = numbers[12];
-    if (numbers[13]) document.getElementById('f-descent').value = numbers[13];
-    if (numbers[14]) document.getElementById('f-max-alt').value = numbers[14];
+    // 時間格式解析
+    timeMatches.forEach(time => {
+      const parts = time.split(':');
+      if (parts.length === 3) {
+        // XX:XX:XX → 時分秒
+        document.getElementById('f-hr').value = parseInt(parts[0]);
+        document.getElementById('f-min').value = parseInt(parts[1]);
+        successCount++;
+      } else if (parts.length === 2) {
+        // XX:XX → 平均配速
+        document.getElementById('f-avg-pace').value = time;
+        successCount++;
+      }
+    });
+
+    // 小數點索引
+    if (decimalNums[0]) { document.getElementById('f-dist').value = decimalNums[0]; successCount++; }
+    if (decimalNums[1]) { document.getElementById('f-avg-speed').value = decimalNums[1]; successCount++; }
+    if (decimalNums[2]) { document.getElementById('f-max-speed').value = decimalNums[2]; successCount++; }
+
+    // 整數索引
+    // integerNums[0] 通常是卡路里，[1] 平均步頻，[2] 最高步頻，[3..5] 爬升下降海拔
+    if (integerNums[3]) { document.getElementById('f-ascent').value = integerNums[3]; successCount++; }
+    if (integerNums[4]) { document.getElementById('f-descent').value = integerNums[4]; successCount++; }
+    if (integerNums[5]) { document.getElementById('f-max-alt').value = integerNums[5]; successCount++; }
   } 
   else if (appType === 'Hikingbook') {
-    // numbers[0] → 距離；numbers[1..2] → 時/分
-    if (numbers[0]) document.getElementById('f-dist').value = numbers[0];
-    if (numbers[1]) document.getElementById('f-hr').value = numbers[1];
-    if (numbers[2]) document.getElementById('f-min').value = numbers[2];
-    // numbers[3..4] → 總爬升 / 總下降
-    if (numbers[3]) document.getElementById('f-ascent').value = numbers[3];
-    if (numbers[4]) document.getElementById('f-descent').value = numbers[4];
-    // numbers[5] → 平均速度；numbers[6] → 消耗熱量 (略過)
-    if (numbers[5]) document.getElementById('f-avg-speed').value = numbers[5];
-    // numbers[7..8] → 最高/最低海拔
-    const maxAlt = numbers[7] ? Number(numbers[7]) : 0;
-    const minAlt = numbers[8] ? Number(numbers[8]) : 0;
-    if (maxAlt && minAlt) {
+    // 距離 (第一個小數點)
+    if (decimalNums[0]) { document.getElementById('f-dist').value = decimalNums[0]; successCount++; }
+    // 平均速度 (第二個小數點)
+    if (decimalNums[1]) { document.getElementById('f-avg-speed').value = decimalNums[1]; successCount++; }
+    
+    // 時分
+    if (integerNums[1]) { document.getElementById('f-hr').value = integerNums[1]; successCount++; }
+    if (integerNums[2]) { document.getElementById('f-min').value = integerNums[2]; successCount++; }
+
+    // 累計爬升、累計下降 (通常在整數中間)
+    if (integerNums[3]) { document.getElementById('f-ascent').value = integerNums[3]; successCount++; }
+    if (integerNums[4]) { document.getElementById('f-descent').value = integerNums[4]; successCount++; }
+
+    // 高度落差 (最後兩個整數的差額：最高海拔 - 最低海拔)
+    if (integerNums.length >= 9) {
+      const maxAlt = parseInt(integerNums[7]);
+      const minAlt = parseInt(integerNums[8]);
+      if (!isNaN(maxAlt) && !isNaN(minAlt)) {
         document.getElementById('f-elev-gain').value = maxAlt - minAlt;
+        successCount++;
+      }
     }
   }
   else if (appType === 'Pacer') {
-    // numbers[0] → 大卡；numbers[1..2] → 時/分
-    if (numbers[1]) document.getElementById('f-hr').value = numbers[1];
-    if (numbers[2]) document.getElementById('f-min').value = numbers[2];
-    // numbers[3] → 距離
-    if (numbers[3]) document.getElementById('f-dist').value = numbers[3];
-    // numbers[4] → 日期 (略過)
-    // numbers[5] → 總步數
-    if (numbers[5]) document.getElementById('f-steps').value = numbers[5];
+    // 距離 (第一個小數點)
+    if (decimalNums[0]) { document.getElementById('f-dist').value = decimalNums[0]; successCount++; }
+    
+    // 步數 (最大的四位或五位整數)
+    const steps = integerNums.find(n => n.length >= 4 && n.length <= 6);
+    if (steps) {
+      document.getElementById('f-steps').value = steps;
+      successCount++;
+    }
+
+    // 時分
+    if (integerNums[1]) { document.getElementById('f-hr').value = integerNums[1]; successCount++; }
+    if (integerNums[2]) { document.getElementById('f-min').value = integerNums[2]; successCount++; }
   }
 
-  alert(`已偵測到 [${appType}] 數據，已自動填入。`);
+  // 4. 錯誤處理：辨識結果不足
+  if (successCount < 2) {
+    if (status) status.textContent = '辨識結果不完整，請手動校對。';
+    if (status) status.style.color = 'red';
+  } else {
+    if (status) status.textContent = `已偵測到 [${appType}] 數據，已自動填入。`;
+    if (status) status.style.color = 'inherit';
+    alert(`已偵測到 [${appType}] 數據，已自動填入。`);
+  }
 }
 
 function clearFormInputs() {
@@ -748,11 +842,24 @@ function clearFormInputs() {
   inputs.forEach(input => {
     if (input.id !== 'f-date') input.value = '';
   });
+  const status = document.getElementById('ocr-status');
+  if (status) {
+    status.textContent = '';
+    status.style.color = 'inherit';
+  }
 }
 
 function applyOcrNumbers(text) {
+  const status = document.getElementById('ocr-status');
   const matches = text.match(/\d+(\.\d+)?/g);
-  if (!matches) return;
+  if (!matches || matches.length < 2) {
+    if (status) {
+        status.textContent = '辨識結果不完整，請手動校對。';
+        status.style.color = 'red';
+    }
+    return;
+  }
+  
   const numbers = matches.map(m => m);
   const distEl = document.getElementById('f-dist');
   const otherInputs = Array.from(document.querySelectorAll('#workout-form input[type="number"]'))
@@ -768,6 +875,10 @@ function applyOcrNumbers(text) {
       numIdx++;
     }
   });
+  if (status) {
+    status.textContent = '智慧辨識完成，已自動填充欄位。';
+    status.style.color = 'inherit';
+  }
 }
 
 // --- 馬錶 ---

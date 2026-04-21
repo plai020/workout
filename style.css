@@ -69,9 +69,23 @@ header {
     display: none;
     flex-direction: column;
     align-items: center;
+    transition: background-color 0.3s ease; /* 背景色變換動畫 */
 }
 .view-section.overlay.active {
     display: flex;
+}
+
+/* 確保背景透明，露出底層 overlay 的顏色 */
+.modal, .modal-content, .form-container, #workout-form {
+    background-color: transparent !important;
+    box-shadow: none !important;
+}
+
+#add-view-title {
+    font-size: 28px;
+    margin-bottom: 20px;
+    font-weight: 800;
+    text-align: center;
 }
 
 .close-overlay {
