@@ -28,14 +28,14 @@
             <div id="day-detail-panel" class="hidden">
                 <div class="panel-header">
                     <h3>運動明細</h3>
-                    <button onclick="closeDetail()" class="close-overlay">✕</button>
+                    <button onclick="closeDetail(event)" class="close-overlay">✕</button>
                 </div>
                 <div id="detail-list"></div>
             </div>
         </section>
 
         <section id="add-view" class="view-section overlay">
-            <button class="close-overlay" onclick="closeOverlay('add-view')">✕</button>
+            <button class="close-overlay" onclick="closeOverlay('add-view', event)">✕</button>
             <h2>新增運動紀錄</h2>
             <div class="type-selector">
                 <button class="type-btn" data-type="run" style="background:#FF5252"><span class="emoji">👟</span><br><span class="label">跑步</span></button>
@@ -58,7 +58,7 @@
         </section>
 
         <section id="manage-view" class="view-section overlay">
-            <button class="close-overlay" onclick="closeOverlay('manage-view')">✕</button>
+            <button class="close-overlay" onclick="closeOverlay('manage-view', event)">✕</button>
             <h2>管理重訓項目</h2>
             <div class="admin-input-group">
                 <input type="text" id="new-part" placeholder="部位 (如:胸)">
@@ -69,7 +69,7 @@
         </section>
 
         <section id="stats-view" class="view-section overlay">
-            <button class="close-overlay" onclick="closeOverlay('stats-view')">✕</button>
+            <button class="close-overlay" onclick="closeOverlay('stats-view', event)">✕</button>
             <h2>統計中心</h2>
             <div class="filter-bar">
                 <div class="date-inputs">
@@ -93,7 +93,7 @@
         </section>
 
         <section id="backup-view" class="view-section overlay">
-            <button class="close-overlay" onclick="closeOverlay('backup-view')">✕</button>
+            <button class="close-overlay" onclick="closeOverlay('backup-view', event)">✕</button>
             <h2>資料備份</h2>
             <div class="backup-options">
                 <button onclick="exportData()" class="backup-btn">💾 匯出資料 (JSON)</button>

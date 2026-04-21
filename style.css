@@ -192,16 +192,17 @@ header {
     justify-content: center;
     box-shadow: 0 8px 15px rgba(0,0,0,0.2);
     transition: transform 0.2s;
+    min-height: 120px; /* 確保高度足夠 */
 }
 .type-btn:active { transform: scale(0.95); }
-.type-btn .emoji { font-size: 45px; margin-bottom: 5px; }
-.type-btn .label { font-size: 15px; font-weight: bold; }
+.type-btn .emoji { font-size: 55px; margin-bottom: 8px; } /* 加大 Emoji 至 55px */
+.type-btn .label { font-size: 18px; font-weight: bold; } /* 加大文字 */
 
 /* 表單優化 */
-#workout-form { width: 100%; max-width: 450px; margin-top: 20px; }
+#workout-form { width: 100%; max-width: 450px; margin-top: 20px; padding-bottom: 40px; }
 input, select, .save-btn, .ocr-btn, .timer-btn, .clear-ocr-btn, .manage-action-btn, .backup-btn, .refresh-btn {
     width: 100%;
-    height: 50px; /* 符合需求 50px */
+    height: 55px; /* 增加到 55px 更好點擊 */
     border-radius: 15px;
     border: 1px solid rgba(0,0,0,0.1);
     padding: 0 15px;
@@ -317,17 +318,27 @@ body.dark-mode .card-gym { background: #311b92 !important; color: #ea80fc; }
 }
 
 /* 管理頁面分組樣式 */
+#gym-manage-container {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    max-width: 500px;
+}
+
 .gym-group {
     width: 100%;
-    max-width: 450px;
     background: var(--card-bg);
     border-radius: 20px;
     padding: 15px;
     margin-bottom: 20px;
     box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+    display: grid;
+    grid-template-columns: 1fr 1fr; /* 雙欄顯示 */
+    gap: 10px;
 }
 .gym-group h3 {
-    margin: 0 0 10px 0;
+    grid-column: span 2; /* 標題橫跨兩欄 */
+    margin: 0 0 5px 0;
     font-size: 18px;
     color: var(--gym-color);
     border-bottom: 2px solid var(--gym-color);
@@ -337,17 +348,29 @@ body.dark-mode .card-gym { background: #311b92 !important; color: #ea80fc; }
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 10px 0;
-    border-bottom: 1px solid rgba(0,0,0,0.05);
+    padding: 12px 10px;
+    background: rgba(0,0,0,0.02);
+    border-radius: 12px;
+    border-bottom: none;
 }
-.gym-action-item:last-child { border-bottom: none; }
+.gym-action-item span {
+    font-size: 15px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 70%;
+}
 .gym-action-item button {
     background: #ffebee;
     color: #f44336;
     border: none;
-    padding: 5px 12px;
+    padding: 6px 10px;
     border-radius: 10px;
-    font-size: 14px;
+    font-size: 12px;
+    width: auto;
+    height: auto;
+    margin-bottom: 0;
+    box-shadow: none;
 }
 
 /* 其他修正 */
@@ -355,10 +378,14 @@ body.dark-mode .card-gym { background: #311b92 !important; color: #ea80fc; }
 .time-group input { flex: 1; }
 
 #day-detail-panel {
-    position: fixed; bottom: 0; left: 0; width: 100%; max-height: 80vh;
+    position: fixed; bottom: 0; left: 0; width: 100%; 
+    max-height: 80vh; /* 固定高度 80vh */
     background: var(--bg-color); border-radius: 30px 30px 0 0;
     box-shadow: 0 -10px 30px rgba(0,0,0,0.3);
-    padding: 25px; overflow-y: auto; z-index: 2500; /* 高於底部導航但低於 Overlay 關閉按鈕 */
+    padding: 25px 25px 100px; /* 增加底部內距，確保不被導航擋住 */
+    overflow-y: auto !important; /* 強制滾動 */
+    -webkit-overflow-scrolling: touch; /* iOS 順滑滾動 */
+    z-index: 2500; 
 }
 .panel-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
 .panel-header h3 { margin: 0; font-size: 20px; }

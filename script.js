@@ -112,10 +112,16 @@ function openOverlay(id, btn = null) {
     btn.classList.add('active'); // 標記點選的按鈕
   }
   
-  if (id === 'stats-view') updateCharts();
+  // 統計中心：延遲 100ms 再初始化圖表，確保 DOM 已渲染
+  if (id === 'stats-view') {
+    setTimeout(() => {
+      updateCharts();
+    }, 100);
+  }
 }
 
-function closeOverlay(id) {
+function closeOverlay(id, event = null) {
+  if (event) event.stopPropagation(); // 防止事件冒泡觸發月曆點擊
   const overlay = document.getElementById(id);
   if (overlay) overlay.classList.remove('active');
   
@@ -210,7 +216,8 @@ function renderCalendar() {
   }
 }
 
-function closeDetail() {
+function closeDetail(event = null) {
+  if (event) event.stopPropagation(); // 防止事件冒泡
   document.getElementById('day-detail-panel').classList.add('hidden');
 }
 
