@@ -28,6 +28,7 @@ body {
     display: flex;
     flex-direction: column;
     height: 100vh; /* 固定高度 */
+    transition: background-color 0.3s ease;
 }
 
 .hidden { display: none !important; }
@@ -359,6 +360,7 @@ body.dark-mode .card-gym { background: #311b92 !important; color: #ea80fc; }
     text-overflow: ellipsis;
     white-space: nowrap;
     max-width: 70%;
+    white-space: normal; /* 支援文字換行 */
 }
 .gym-action-item button {
     background: #ffebee;
@@ -371,6 +373,36 @@ body.dark-mode .card-gym { background: #311b92 !important; color: #ea80fc; }
     height: auto;
     margin-bottom: 0;
     box-shadow: none;
+}
+
+/* 統計中心排版修復 */
+.filter-bar {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    width: 100%;
+    max-width: 450px;
+    margin-bottom: 20px;
+}
+.filter-row {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    width: 100%;
+}
+.filter-row > * { flex: 1; margin-bottom: 0; }
+.filter-row span { flex: 0; }
+
+.charts-scroll-area {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+.chart-container {
+    width: 100%;
+    height: 350px; /* 強制設定 Canvas 容器高度 */
+    position: relative;
 }
 
 /* 其他修正 */

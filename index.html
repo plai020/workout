@@ -37,7 +37,7 @@
         <section id="add-view" class="view-section overlay">
             <button class="close-overlay" onclick="closeOverlay('add-view', event)">✕</button>
             <h2>新增運動紀錄</h2>
-            <div class="type-selector">
+            <div id="add-type-selector" class="type-selector">
                 <button class="type-btn" data-type="run" style="background:#FF5252"><span class="emoji">👟</span><br><span class="label">跑步</span></button>
                 <button class="type-btn" data-type="walk" style="background:#FFD740"><span class="emoji">👣</span><br><span class="label">散步</span></button>
                 <button class="type-btn" data-type="climb" style="background:#448AFF"><span class="emoji">🏔️</span><br><span class="label">登山</span></button>
@@ -48,7 +48,7 @@
                 <div class="ocr-section">
                     <input type="file" id="ocr-upload" accept="image/*" hidden>
                     <div class="ocr-actions">
-                        <button type="button" class="ocr-btn" onclick="document.getElementById('ocr-upload').click()">📷 截圖辨識數字</button>
+                        <button type="button" class="ocr-btn" onclick="document.getElementById('ocr-upload').click()">📷 智慧辨識 (Running/Hiking/Pacer)</button>
                         <button type="button" class="clear-ocr-btn" onclick="clearFormInputs()">🗑️ 清空輸入</button>
                     </div>
                     <p id="ocr-status"></p>
@@ -72,23 +72,25 @@
             <button class="close-overlay" onclick="closeOverlay('stats-view', event)">✕</button>
             <h2>統計中心</h2>
             <div class="filter-bar">
-                <div class="date-inputs">
+                <div class="filter-row">
                     <input type="date" id="stat-start">
                     <span>至</span>
                     <input type="date" id="stat-end">
                 </div>
-                <select id="stat-period">
-                    <option value="day">日報</option>
-                    <option value="month">月報</option>
-                    <option value="year">年報</option>
-                </select>
-                <button onclick="updateCharts()" class="refresh-btn">更新圖表</button>
+                <div class="filter-row">
+                    <select id="stat-period">
+                        <option value="day">日報</option>
+                        <option value="month">月報</option>
+                        <option value="year">年報</option>
+                    </select>
+                    <button onclick="updateCharts()" class="refresh-btn">更新圖表</button>
+                </div>
             </div>
             <div class="charts-scroll-area">
-                <canvas id="stepsChart"></canvas>
-                <canvas id="distChart"></canvas>
-                <canvas id="climbChart"></canvas>
-                <canvas id="gymChart"></canvas>
+                <div class="chart-container"><canvas id="stepsChart"></canvas></div>
+                <div class="chart-container"><canvas id="distChart"></canvas></div>
+                <div class="chart-container"><canvas id="climbChart"></canvas></div>
+                <div class="chart-container"><canvas id="gymChart"></canvas></div>
             </div>
         </section>
 

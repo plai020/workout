@@ -99,9 +99,14 @@ function openOverlay(id, btn = null) {
   const overlay = document.getElementById(id);
   if (!overlay) return;
   
-  // 如果是新增，重置表單
+  // 重置背景色
+  document.body.style.backgroundColor = '';
+
+  // 如果是新增，重置顯示狀態
   if (id === 'add-view') {
+    const selector = document.getElementById('add-type-selector');
     const form = document.getElementById('workout-form');
+    selector.classList.remove('hidden');
     form.classList.add('hidden');
     delete form.dataset.editId;
   }
@@ -112,11 +117,13 @@ function openOverlay(id, btn = null) {
     btn.classList.add('active'); // 標記點選的按鈕
   }
   
-  // 統計中心：延遲 100ms 再初始化圖表，確保 DOM 已渲染
+  // 統計中心：使用 requestAnimationFrame 確保 DOM 渲染完成
   if (id === 'stats-view') {
-    setTimeout(() => {
-      updateCharts();
-    }, 100);
+    requestAnimationFrame(() => {
+      setTimeout(() => {
+        updateCharts();
+      }, 50);
+    });
   }
 }
 
@@ -125,6 +132,9 @@ function closeOverlay(id, event = null) {
   const overlay = document.getElementById(id);
   if (overlay) overlay.classList.remove('active');
   
+  // 重置背景色
+  document.body.style.backgroundColor = '';
+
   // 關閉 Overlay 時，清空導航列的 active 狀態（回到月曆）
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
 }
@@ -275,6 +285,7 @@ function summaryLine(r) {
   const parts = [];
   if (r.title) parts.push(`[${r.title}]`);
   if (r.distance != null) parts.push(`${r.distance} km`);
+  if (r.type === 'run' && r.avgPace) parts.push(`配速 ${r.avgPace}`);
   if (r.hours || r.minutes) parts.push(`${r.hours || 0}時${r.minutes || 0}分`);
   if (r.type === 'walk' && r.steps != null) parts.push(`${r.steps} 步`);
   if (r.ascent != null) parts.push(`爬升 ${r.ascent}m`);
@@ -302,12 +313,19 @@ function editRecord(id) {
   if (!r) return;
 
   openOverlay('add-view');
+  
+  const selector = document.getElementById('add-type-selector');
+  selector.classList.add('hidden'); // 編輯時隱藏大按鈕
 
   currentFormType = r.type;
   const form = document.getElementById('workout-form');
   form.className = `active-form-${r.type}`;
   form.classList.remove('hidden');
   renderFields(r.type);
+  
+  // 背景連動
+  const colors = { run: '#FFEBEE', walk: '#FFFDE7', climb: '#E3F2FD', gym: '#F3E5F5' };
+  document.body.style.backgroundColor = colors[r.type] || '';
 
   const dateEl = document.getElementById('f-date');
   if (dateEl) dateEl.value = r.date;
@@ -373,6 +391,7 @@ function editRecord(id) {
 // --- 新增表單 ---
 function initForm() {
   const typeBtns = document.querySelectorAll('.type-btn');
+  const selector = document.getElementById('add-type-selector');
   const form = document.getElementById('workout-form');
 
   typeBtns.forEach((btn) => {
@@ -380,9 +399,16 @@ function initForm() {
       delete form.dataset.editId;
       const type = btn.dataset.type;
       currentFormType = type;
+      
+      // 動態切換邏輯
+      selector.classList.add('hidden');
       form.className = `active-form-${type}`;
       form.classList.remove('hidden');
       renderFields(type);
+      
+      // 背景連動
+      const colors = { run: '#FFEBEE', walk: '#FFFDE7', climb: '#E3F2FD', gym: '#F3E5F5' };
+      document.body.style.backgroundColor = colors[type] || '';
     };
   });
 }
@@ -414,7 +440,7 @@ function renderFields(type) {
     `;
     if (type === 'run') {
       html += `
-        <input type="number" step="0.01" id="f-avg-pace" placeholder="平均配速 (min/km)">
+        <input type="text" id="f-avg-pace" placeholder="平均配速 (如 07:17)" oninput="formatPace(this)">
         <input type="number" step="0.1" id="f-avg-speed" placeholder="平均速度 (km/h)">
         <input type="number" step="0.1" id="f-max-speed" placeholder="最快速度 (km/h)">
         <input type="number" id="f-ascent" placeholder="累計爬升 (m)">
@@ -438,6 +464,16 @@ function renderFields(type) {
   if (type === 'gym') {
     updateActions();
     loadLastGymData();
+  }
+}
+
+function formatPace(input) {
+  let v = input.value.replace(/[^\d]/g, '');
+  if (v.length > 4) v = v.slice(0, 4);
+  if (v.length >= 3) {
+    input.value = v.slice(0, v.length - 2) + ':' + v.slice(v.length - 2);
+  } else {
+    input.value = v;
   }
 }
 
@@ -527,7 +563,7 @@ function initWorkoutFormSubmit() {
       rec.hours = numOrNull(document.getElementById('f-hr')?.value);
       rec.minutes = numOrNull(document.getElementById('f-min')?.value);
       if (currentFormType === 'run') {
-        rec.avgPace = numOrNull(document.getElementById('f-avg-pace')?.value, 2);
+        rec.avgPace = document.getElementById('f-avg-pace')?.value?.trim() || '';
         rec.avgSpeed = numOrNull(document.getElementById('f-avg-speed')?.value, 1);
         rec.maxSpeed = numOrNull(document.getElementById('f-max-speed')?.value, 1);
         rec.ascent = numOrNull(document.getElementById('f-ascent')?.value);
@@ -553,6 +589,11 @@ function initWorkoutFormSubmit() {
     persistRecords();
     form.reset();
     form.classList.add('hidden');
+    
+    // 重置背景與顯示
+    document.body.style.backgroundColor = '';
+    document.getElementById('add-type-selector').classList.remove('hidden');
+
     closeOverlay('add-view');
     renderCalendar();
     updateCharts();
@@ -567,7 +608,7 @@ function numOrNull(v, fixed = null) {
   return fixed == null ? n : Number(n.toFixed(fixed));
 }
 
-// --- OCR：辨識後填入距離/步數，清空 input，不存圖 ---
+// --- 智慧 OCR ---
 function initOcrUpload() {
   const input = document.getElementById('ocr-upload');
   const status = document.getElementById('ocr-status');
@@ -584,16 +625,91 @@ function initOcrUpload() {
     if (status) status.textContent = '辨識中…';
 
     try {
-      const { data } = await Tesseract.recognize(file, 'eng', { logger: () => {} });
+      const { data } = await Tesseract.recognize(file, 'eng+chi_tra', { logger: () => {} });
       const text = data?.text || '';
-      applyOcrNumbers(text);
-      if (status) status.textContent = '辨識完成，已填入數字（請自行確認）。';
+      smartOCR(text);
+      if (status) status.textContent = '智慧辨識完成，已自動填充欄位。';
     } catch (err) {
       if (status) status.textContent = `辨識失敗：${err.message || err}`;
     } finally {
       input.value = '';
     }
   });
+}
+
+function smartOCR(text) {
+  const t = text.replace(/\s+/g, ' ');
+  console.log("OCR Text:", t);
+
+  // 1. 判斷模版
+  let type = '';
+  if (t.includes('Average Pace') || t.includes('Calories')) type = 'run';
+  else if (t.includes('總爬升') || t.includes('Hikingbook')) type = 'climb';
+  else if (t.includes('活躍時間') || t.includes('步數目標') || t.includes('Pacer')) type = 'walk';
+
+  if (!type) {
+    applyOcrNumbers(text); // 退回到通用數字抓取
+    return;
+  }
+
+  // 自動切換到對應類型
+  const selector = document.getElementById('add-type-selector');
+  const form = document.getElementById('workout-form');
+  currentFormType = type;
+  selector.classList.add('hidden');
+  form.className = `active-form-${type}`;
+  form.classList.remove('hidden');
+  renderFields(type);
+  const colors = { run: '#FFEBEE', walk: '#FFFDE7', climb: '#E3F2FD', gym: '#F3E5F5' };
+  document.body.style.backgroundColor = colors[type] || '';
+
+  // 2. 提取邏輯
+  if (type === 'run') {
+    // 距離: 2位整數.2位小數
+    const distMatch = t.match(/(\d{1,2}\.\d{2})/);
+    if (distMatch) document.getElementById('f-dist').value = distMatch[1];
+    
+    // 配速: 07:17
+    const paceMatch = t.match(/(\d{2}:\d{2})/);
+    if (paceMatch) document.getElementById('f-avg-pace').value = paceMatch[1];
+    
+    // 時間: 00:34:34
+    const timeMatch = t.match(/(\d{2}:\d{2}:\d{2})/);
+    if (timeMatch) {
+      const [h, m, s] = timeMatch[1].split(':').map(Number);
+      document.getElementById('f-hr').value = h;
+      document.getElementById('f-min').value = m;
+    }
+  } 
+  else if (type === 'climb') {
+    // 距離
+    const distMatch = t.match(/(\d+\.\d+)\s*km/i) || t.match(/(\d+\.\d+)/);
+    if (distMatch) document.getElementById('f-dist').value = distMatch[1];
+
+    // 爬升/下降
+    const ascMatch = t.match(/總爬升\s*(\d+)/) || t.match(/(\d+)\s*m/);
+    if (ascMatch) document.getElementById('f-ascent').value = ascMatch[1];
+    const desMatch = t.match(/總下降\s*(\d+)/);
+    if (desMatch) document.getElementById('f-descent').value = desMatch[1];
+
+    // 高度落差計算
+    const altMatch = t.matchAll(/(\d{3,4})\s*m/g);
+    const alts = [...altMatch].map(m => Number(m[1]));
+    if (alts.length >= 2) {
+      const maxAlt = Math.max(...alts);
+      const minAlt = Math.min(...alts);
+      document.getElementById('f-elev-gain').value = maxAlt - minAlt;
+    }
+  }
+  else if (type === 'walk') {
+    // 步數: 5位數
+    const stepsMatch = t.match(/(\d{4,6})/);
+    if (stepsMatch) document.getElementById('f-steps').value = stepsMatch[1];
+    
+    // 距離
+    const distMatch = t.match(/(\d+\.\d+)/);
+    if (distMatch) document.getElementById('f-dist').value = distMatch[1];
+  }
 }
 
 function clearFormInputs() {
@@ -604,23 +720,17 @@ function clearFormInputs() {
 }
 
 function applyOcrNumbers(text) {
-  // 提取所有數字 (包含小數)
   const matches = text.match(/\d+(\.\d+)?/g);
   if (!matches) return;
-  
   const numbers = matches.map(m => m);
-  
-  // 優先填入距離 (通常是第一個小數)
   const distEl = document.getElementById('f-dist');
   const otherInputs = Array.from(document.querySelectorAll('#workout-form input[type="number"]'))
     .filter(i => i.id !== 'f-dist' && i.id !== 'f-date');
-
   let numIdx = 0;
   if (distEl && numbers[numIdx]) {
     distEl.value = numbers[numIdx];
     numIdx++;
   }
-
   otherInputs.forEach((input) => {
     if (numbers[numIdx] != null) {
       input.value = numbers[numIdx];
@@ -666,7 +776,7 @@ function startTimer(sec) {
   }, 1000);
 }
 
-// --- 統計：依 stat-start / stat-end 篩選，四張長條圖 ---
+// --- 統計 ---
 function destroyChart(inst) {
   if (inst && typeof inst.destroy === 'function') inst.destroy();
   return null;
@@ -695,14 +805,12 @@ function bucketKeyForRecord(dateStr, period) {
   if (period === 'day') return dateStr;
   if (period === 'month') return `${y}-${String(m).padStart(2, '0')}`;
   if (period === 'year') return `${y}`;
-  if (period === 'quarter') return `${y}-Q${Math.floor((m - 1) / 3) + 1}`;
   return dateStr;
 }
 
 function aggregateForCharts(filtered) {
   const period = document.getElementById('stat-period')?.value || 'day';
   const buckets = {};
-
   filtered.forEach((r) => {
     const key = bucketKeyForRecord(r.date, period);
     if (!buckets[key]) buckets[key] = { steps: 0, dist: 0, up: 0, load: 0 };
@@ -713,7 +821,6 @@ function aggregateForCharts(filtered) {
       buckets[key].load += Number(r.weight || 0) * Number(r.sets || 0) * Number(r.reps || 0);
     }
   });
-
   const labels = Object.keys(buckets).sort();
   return {
     labels,
@@ -731,7 +838,6 @@ function updateCharts() {
     alert('起始日期不能大於結束日期');
     return;
   }
-
   const filtered = filterRecordsByStatRange();
   const { labels, steps, dist, up, load } = aggregateForCharts(filtered);
 
@@ -750,48 +856,22 @@ function updateCharts() {
   };
 
   const ctxS = document.getElementById('stepsChart')?.getContext('2d');
-  if (ctxS) {
-    chartStepsInst = new Chart(ctxS, {
-      ...common,
-      data: {
-        labels: labels.length ? labels : ['無資料'],
-        datasets: [{ label: '步數 (walk)', data: labels.length ? steps : [0], backgroundColor: '#FFD740' }]
-      }
-    });
-  }
-
+  if (ctxS) chartStepsInst = new Chart(ctxS, { ...common, data: { labels: labels.length ? labels : ['無資料'], datasets: [{ label: '步數 (walk)', data: labels.length ? steps : [0], backgroundColor: '#FFD740' }] } });
+  
   const ctxD = document.getElementById('distChart')?.getContext('2d');
-  if (ctxD) {
-    chartDistInst = new Chart(ctxD, {
-      ...common,
-      data: {
-        labels: labels.length ? labels : ['無資料'],
-        datasets: [{ label: '距離 km (run + climb)', data: labels.length ? dist : [0], backgroundColor: '#FF5252' }]
-      }
-    });
-  }
-
+  if (ctxD) chartDistInst = new Chart(ctxD, { ...common, data: { labels: labels.length ? labels : ['無資料'], datasets: [{ label: '距離 km (run + climb)', data: labels.length ? dist : [0], backgroundColor: '#FF5252' }] } });
+  
   const ctxC = document.getElementById('climbChart')?.getContext('2d');
-  if (ctxC) {
-    chartClimbInst = new Chart(ctxC, {
-      ...common,
-      data: {
-        labels: labels.length ? labels : ['無資料'],
-        datasets: [{ label: '上升 m (climb)', data: labels.length ? up : [0], backgroundColor: '#448AFF' }]
-      }
-    });
-  }
-
+  if (ctxC) chartClimbInst = new Chart(ctxC, { ...common, data: { labels: labels.length ? labels : ['無資料'], datasets: [{ label: '上升 m (climb)', data: labels.length ? up : [0], backgroundColor: '#448AFF' }] } });
+  
   const ctxG = document.getElementById('gymChart')?.getContext('2d');
-  if (ctxG) {
-    chartGymInst = new Chart(ctxG, {
-      ...common,
-      data: {
-        labels: labels.length ? labels : ['無資料'],
-        datasets: [{ label: '總負荷 (gym)', data: labels.length ? load : [0], backgroundColor: '#B388FF' }]
-      }
-    });
-  }
+  if (ctxG) chartGymInst = new Chart(ctxG, { ...common, data: { labels: labels.length ? labels : ['無資料'], datasets: [{ label: '總負荷 (gym)', data: labels.length ? load : [0], backgroundColor: '#B388FF' }] } });
+
+  // 確保 Resize
+  if (chartStepsInst) chartStepsInst.resize();
+  if (chartDistInst) chartDistInst.resize();
+  if (chartClimbInst) chartClimbInst.resize();
+  if (chartGymInst) chartGymInst.resize();
 }
 
 // --- 主題 ---
@@ -810,17 +890,13 @@ function addGymAction() {
   const part = document.getElementById('new-part')?.value?.trim();
   const action = document.getElementById('new-action')?.value?.trim();
   if (!part || !action) return alert('請輸入部位與動作');
-  
-  // 防重機制
   const exists = gymActions.some(a => a.part === part && a.action === action);
   if (exists) return alert('此部位與動作已存在！');
-
   gymActions.push({ part, action });
   persistGymActions();
   document.getElementById('new-part').value = '';
   document.getElementById('new-action').value = '';
   renderGymManageList();
-  
   if (currentFormType === 'gym') renderFields('gym');
 }
 
@@ -828,26 +904,19 @@ function renderGymManageList() {
   const container = document.getElementById('gym-manage-container');
   if (!container) return;
   container.innerHTML = '';
-  
-  // 按部位分組
   const groups = {};
   gymActions.forEach((item, idx) => {
     if (!groups[item.part]) groups[item.part] = [];
     groups[item.part].push({ ...item, originalIdx: idx });
   });
-
   Object.keys(groups).sort().forEach(part => {
     const groupDiv = document.createElement('div');
     groupDiv.className = 'gym-group';
     groupDiv.innerHTML = `<h3>${escapeHtml(part)}</h3>`;
-    
     groups[part].forEach(item => {
       const itemDiv = document.createElement('div');
       itemDiv.className = 'gym-action-item';
-      itemDiv.innerHTML = `
-        <span>${escapeHtml(item.action)}</span>
-        <button onclick="deleteGymAction(${item.originalIdx})">刪除</button>
-      `;
+      itemDiv.innerHTML = `<span>${escapeHtml(item.action)}</span><button onclick="deleteGymAction(${item.originalIdx})">刪除</button>`;
       groupDiv.appendChild(itemDiv);
     });
     container.appendChild(groupDiv);
