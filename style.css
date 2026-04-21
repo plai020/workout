@@ -86,6 +86,31 @@ header {
     margin-bottom: 20px;
     font-weight: 800;
     text-align: center;
+    color: #333; /* 預設深色 */
+}
+
+/* 深色模式標題高對比度強化 */
+body.dark-mode #add-view-title,
+body.dark-mode .view-section.overlay h2 {
+    color: #ffffff !important;
+    text-shadow: 0 2px 4px rgba(0,0,0,0.5);
+}
+
+/* 彈出視窗內文字顏色確保 */
+.view-section.overlay {
+    color: var(--text-color);
+}
+
+body.dark-mode .view-section.overlay {
+    color: #ffffff;
+}
+
+body.dark-mode .type-btn .label {
+    color: #ffffff;
+}
+
+body.dark-mode input::placeholder {
+    color: rgba(255, 255, 255, 0.6);
 }
 
 .close-overlay {
