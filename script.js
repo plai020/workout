@@ -638,78 +638,97 @@ function initOcrUpload() {
 }
 
 function smartOCR(text) {
-  const t = text.replace(/\s+/g, ' ');
-  console.log("OCR Text:", t);
+  // 1. 辨識前置判斷
+  let appType = '';
+  if (text.includes('Distance (km)') || text.includes('Average Pace')) appType = 'Running App';
+  else if (text.includes('Hikingbook') || text.includes('總爬升')) appType = 'Hikingbook';
+  else if (text.includes('活躍時間') || text.includes('步數目標')) appType = 'Pacer';
 
-  // 1. 判斷模版
-  let type = '';
-  if (t.includes('Average Pace') || t.includes('Calories')) type = 'run';
-  else if (t.includes('總爬升') || t.includes('Hikingbook')) type = 'climb';
-  else if (t.includes('活躍時間') || t.includes('步數目標') || t.includes('Pacer')) type = 'walk';
-
-  if (!type) {
-    applyOcrNumbers(text); // 退回到通用數字抓取
+  if (!appType) {
+    applyOcrNumbers(text);
     return;
   }
 
   // 自動切換到對應類型
+  let workoutType = 'run';
+  if (appType === 'Hikingbook') workoutType = 'climb';
+  if (appType === 'Pacer') workoutType = 'walk';
+
   const selector = document.getElementById('add-type-selector');
   const form = document.getElementById('workout-form');
-  currentFormType = type;
+  currentFormType = workoutType;
   selector.classList.add('hidden');
-  form.className = `active-form-${type}`;
+  form.className = `active-form-${workoutType}`;
   form.classList.remove('hidden');
-  renderFields(type);
+  renderFields(workoutType);
   const colors = { run: '#FFEBEE', walk: '#FFFDE7', climb: '#E3F2FD', gym: '#F3E5F5' };
-  document.body.style.backgroundColor = colors[type] || '';
+  document.body.style.backgroundColor = colors[workoutType] || '';
 
-  // 2. 提取邏輯
-  if (type === 'run') {
-    // 距離: 2位整數.2位小數
-    const distMatch = t.match(/(\d{1,2}\.\d{2})/);
-    if (distMatch) document.getElementById('f-dist').value = distMatch[1];
-    
-    // 配速: 07:17
-    const paceMatch = t.match(/(\d{2}:\d{2})/);
-    if (paceMatch) document.getElementById('f-avg-pace').value = paceMatch[1];
-    
-    // 時間: 00:34:34
-    const timeMatch = t.match(/(\d{2}:\d{2}:\d{2})/);
-    if (timeMatch) {
-      const [h, m, s] = timeMatch[1].split(':').map(Number);
-      document.getElementById('f-hr').value = h;
-      document.getElementById('f-min').value = m;
+  // 2. 提取數字與時間 (確保時間格式 00:00:00 不被拆散)
+  // 正則說明：\d{1,2}:\d{2}(?::\d{2})? 匹配時分秒或分秒；\d+(\.\d+)? 匹配一般數字
+  const matches = text.match(/\d{1,2}:\d{2}(?::\d{2})?|\d+(\.\d+)?/g) || [];
+  const tokens = matches.map(m => m.trim());
+  console.log(`Detected ${appType} tokens:`, tokens);
+
+  // 3. 依序填入規則
+  if (appType === 'Running App') {
+    // 規則：日期, 距離, 時, 分, 秒, 卡路里, 配速, 平均速度, 最高速度, 爬升, 下降, 海拔
+    if (tokens[0]) document.getElementById('f-date').value = formatDateToken(tokens[0]);
+    if (tokens[1]) document.getElementById('f-dist').value = tokens[1];
+    if (tokens[2]) document.getElementById('f-hr').value = tokens[2];
+    if (tokens[3]) document.getElementById('f-min').value = tokens[3];
+    // tokens[4] 為秒，略過或視需求處理
+    // tokens[5] 為卡路里，略過
+    if (tokens[6]) {
+        // tokens[6] 可能是 MM:SS 格式
+        document.getElementById('f-avg-pace').value = tokens[6];
     }
+    if (tokens[7]) document.getElementById('f-avg-speed').value = tokens[7];
+    if (tokens[8]) document.getElementById('f-max-speed').value = tokens[8];
+    if (tokens[9]) document.getElementById('f-ascent').value = tokens[9];
+    if (tokens[10]) document.getElementById('f-descent').value = tokens[10];
+    if (tokens[11]) document.getElementById('f-max-alt').value = tokens[11];
   } 
-  else if (type === 'climb') {
-    // 距離
-    const distMatch = t.match(/(\d+\.\d+)\s*km/i) || t.match(/(\d+\.\d+)/);
-    if (distMatch) document.getElementById('f-dist').value = distMatch[1];
-
-    // 爬升/下降
-    const ascMatch = t.match(/總爬升\s*(\d+)/) || t.match(/(\d+)\s*m/);
-    if (ascMatch) document.getElementById('f-ascent').value = ascMatch[1];
-    const desMatch = t.match(/總下降\s*(\d+)/);
-    if (desMatch) document.getElementById('f-descent').value = desMatch[1];
-
+  else if (appType === 'Hikingbook') {
+    // 規則：日期, 距離, 時, 分, 總爬升, 總下降, 平均速度, 最高海拔, 最低海拔
+    if (tokens[0]) document.getElementById('f-date').value = formatDateToken(tokens[0]);
+    if (tokens[1]) document.getElementById('f-dist').value = tokens[1];
+    if (tokens[2]) document.getElementById('f-hr').value = tokens[2];
+    if (tokens[3]) document.getElementById('f-min').value = tokens[3];
+    if (tokens[4]) document.getElementById('f-ascent').value = tokens[4];
+    if (tokens[5]) document.getElementById('f-descent').value = tokens[5];
+    if (tokens[6]) document.getElementById('f-avg-speed').value = tokens[6];
+    
     // 高度落差計算
-    const altMatch = t.matchAll(/(\d{3,4})\s*m/g);
-    const alts = [...altMatch].map(m => Number(m[1]));
-    if (alts.length >= 2) {
-      const maxAlt = Math.max(...alts);
-      const minAlt = Math.min(...alts);
-      document.getElementById('f-elev-gain').value = maxAlt - minAlt;
+    const maxAlt = tokens[7] ? Number(tokens[7]) : 0;
+    const minAlt = tokens[8] ? Number(tokens[8]) : 0;
+    if (maxAlt && minAlt) {
+        document.getElementById('f-elev-gain').value = maxAlt - minAlt;
     }
   }
-  else if (type === 'walk') {
-    // 步數: 5位數
-    const stepsMatch = t.match(/(\d{4,6})/);
-    if (stepsMatch) document.getElementById('f-steps').value = stepsMatch[1];
-    
-    // 距離
-    const distMatch = t.match(/(\d+\.\d+)/);
-    if (distMatch) document.getElementById('f-dist').value = distMatch[1];
+  else if (appType === 'Pacer') {
+    // 規則：距離, 時, 分, 總步數
+    if (tokens[0]) document.getElementById('f-dist').value = tokens[0];
+    if (tokens[1]) document.getElementById('f-hr').value = tokens[1];
+    if (tokens[2]) document.getElementById('f-min').value = tokens[2];
+    if (tokens[3]) document.getElementById('f-steps').value = tokens[3];
   }
+
+  alert(`已偵測到 [${appType}] 數據，已自動填入。`);
+}
+
+/** 輔助：將 YYYY/M/D 格式轉為 YYYY-MM-DD */
+function formatDateToken(token) {
+    if (token.includes('/') || token.includes('-')) {
+        const parts = token.split(/[\/\-]/);
+        if (parts.length === 3) {
+            const y = parts[0];
+            const m = parts[1].padStart(2, '0');
+            const d = parts[2].padStart(2, '0');
+            return `${y}-${m}-${d}`;
+        }
+    }
+    return token;
 }
 
 function clearFormInputs() {
