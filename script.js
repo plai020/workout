@@ -741,16 +741,25 @@ async function handleOCR(file) {
     const img = await loadImageFromFile(file);
     const processed = await preprocessImage(img);
     const worker = await getTesseractWorker();
-    const { data } = await worker.recognize(processed.dataUrl);
+    const [processedResult, originalResult] = await Promise.all([
+      worker.recognize(processed.dataUrl),
+      worker.recognize(img)
+    ]);
 
     clearTimeout(timeoutMsg);
 
-    const rawText = (data?.text || '').trim();
+    const processedText = (processedResult?.data?.text || '').trim();
+    const originalText = (originalResult?.data?.text || '').trim();
+    const rawText = [processedText, originalText].filter(Boolean).join('\n');
     console.log('[OCR raw text]', rawText);
 
-    const filteredWords = (data?.words || [])
+    const mergedWords = [
+      ...(processedResult?.data?.words || []),
+      ...(originalResult?.data?.words || [])
+    ];
+    const filteredWords = mergedWords
       .filter((word) => word?.text?.trim())
-      .filter((word) => word?.bbox?.y0 > processed.height * 0.03);
+      .filter((word) => word?.bbox?.y0 > processed.height * 0.015);
 
     const result = smartOCR({
       words: filteredWords,
@@ -790,10 +799,10 @@ function initOcrUpload() {
  * 尋找 YYYY/MM/DD 或 YYYY年MM月DD日 格式
  */
 function detectDate(text) {
-  const regex = /\d{4}[\/\-年\.]\d{1,2}[\/\-月\.]\d{1,2}/;
+  const regex = /\d{4}\s*[\/\-年\.]\s*\d{1,2}\s*[\/\-月\.]\s*\d{1,2}/;
   const match = text.match(regex);
   if (match) {
-    const dateStr = match[0].replace(/[年月]/g, '-').replace(/[\/\.]/g, '-').replace(/日/g, '');
+    const dateStr = match[0].replace(/\s*/g, '').replace(/[年月]/g, '-').replace(/[\/\.]/g, '-').replace(/日/g, '');
     const parts = dateStr.split('-');
     if (parts.length === 3) {
       const y = parts[0];
@@ -869,8 +878,37 @@ function extractHikingbookMetrics(text) {
     metrics.minutes = timeMatch[2];
   }
 
+  if (!metrics.hours || !metrics.minutes) {
+    const compactTimeMatch = text.match(/(\d{1,2})[:：](\d{2})/);
+    if (compactTimeMatch) {
+      metrics.hours = compactTimeMatch[1];
+      metrics.minutes = compactTimeMatch[2];
+    }
+  }
+
   const allIntegers = (text.match(/\d+/g) || []).map(Number).filter(Number.isFinite);
   const chartCandidates = allIntegers.filter((value) => value >= 20 && value <= 500);
+  const allDecimals = text.match(/\d+(?:\.\d+)?/g) || [];
+  if ((!metrics.distance || !metrics.avgSpeed || !metrics.ascent || !metrics.descent) && allDecimals.length >= 5) {
+    metrics.distance = metrics.distance || allDecimals[1];
+    if (!metrics.hours || !metrics.minutes) {
+      const timeParts = allDecimals[2]?.split(':') || [];
+      if (timeParts.length === 2) {
+        metrics.hours = timeParts[0];
+        metrics.minutes = timeParts[1];
+      }
+    }
+  }
+  const numericTokens = text.match(/\d+(?:\.\d+)?/g) || [];
+  if ((!metrics.ascent || !metrics.descent || !metrics.avgSpeed) && numericTokens.length >= 5) {
+    const pureValues = numericTokens.filter((token) => !token.includes(':'));
+    if (pureValues.length >= 5) {
+      metrics.distance = metrics.distance || pureValues[0];
+      metrics.ascent = metrics.ascent || pureValues[1];
+      metrics.descent = metrics.descent || pureValues[2];
+      metrics.avgSpeed = metrics.avgSpeed || pureValues[3];
+    }
+  }
   if (chartCandidates.length >= 2) {
     const lastTwo = chartCandidates.slice(-2);
     const diff = Math.abs(lastTwo[0] - lastTwo[1]);
@@ -894,6 +932,26 @@ function extractPacerMetrics(text) {
   if (timeMatch) {
     metrics.hours = timeMatch[1];
     metrics.minutes = timeMatch[2];
+  }
+
+  if (!metrics.date) {
+    const pacerDate = text.match(/\d{4}\s*年\s*\d{1,2}\s*月\s*\d{1,2}\s*日/);
+    if (pacerDate) {
+      metrics.date = pacerDate[0]
+        .replace(/\s*/g, '')
+        .replace('年', '-')
+        .replace('月', '-')
+        .replace('日', '');
+    }
+  }
+
+  const stepCandidates = (text.match(/\d{3,5}/g) || [])
+    .filter((value) => value !== '10000' && value !== '2026');
+  if (!metrics.steps && stepCandidates.length > 0) {
+    metrics.steps = stepCandidates
+      .map(Number)
+      .filter((value) => value >= 300 && value <= 30000)
+      .sort((a, b) => a - b)[0]?.toString() || null;
   }
 
   return metrics;
@@ -1075,7 +1133,8 @@ function smartOCR({ words, fullText }) {
   const originalText = rawText.replace(/\s+/g, ' ').trim();
   const normalizedWords = normalizeOcrWords(words);
   const wordText = normalizedWords.map((word) => word.text).join(' ');
-  const detectedDate = detectDate(originalText) || detectDate(wordText);
+  const pacerMetricsForDate = extractPacerMetrics(rawText);
+  const detectedDate = detectDate(originalText) || detectDate(wordText) || pacerMetricsForDate.date || '';
   const text = originalText.replace(/\d{4}[\/年]\d{1,2}[\/月]\d{1,2}日?/g, '').trim();
   console.log('[OCR sanitized text]', text);
 
