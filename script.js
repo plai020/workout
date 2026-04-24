@@ -633,45 +633,128 @@ function numOrNull(v, fixed = null) {
 }
 
 // --- 智慧 OCR ---
+
+/**
+ * V4.4: 圖片預處理 (灰階 + 二值化)
+ * 提升 Tesseract 辨識速度與準確率
+ */
+async function preprocessImage(imgElement) {
+  const canvas = document.createElement('canvas');
+  const ctx = canvas.getContext('2d');
+  const maxWidth = 1800;
+  const scale = imgElement.naturalWidth > maxWidth ? maxWidth / imgElement.naturalWidth : 1;
+  canvas.width = Math.max(1, Math.round(imgElement.naturalWidth * scale));
+  canvas.height = Math.max(1, Math.round(imgElement.naturalHeight * scale));
+
+  const boost = 1.25;
+  ctx.filter = `grayscale(100%) contrast(${boost})`;
+  ctx.drawImage(imgElement, 0, 0, canvas.width, canvas.height);
+  ctx.filter = 'none';
+  const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  const data = imageData.data;
+
+  for (let i = 0; i < data.length; i += 4) {
+    const gray = 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
+    const threshold = gray > 148 ? 255 : 0;
+    data[i] = data[i + 1] = data[i + 2] = threshold;
+  }
+
+  ctx.putImageData(imageData, 0, 0);
+  return {
+    dataUrl: canvas.toDataURL('image/png'),
+    width: canvas.width,
+    height: canvas.height
+  };
+}
+
+let tesseractWorker = null;
+async function getTesseractWorker() {
+  if (tesseractWorker) return tesseractWorker;
+  tesseractWorker = await Tesseract.createWorker('eng+chi_tra', 1, {
+    cacheMethod: 'write', // V4.4: 語系緩存加速
+    logger: m => console.log(m)
+  });
+  return tesseractWorker;
+}
+
+function loadImageFromFile(file) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const objectUrl = URL.createObjectURL(file);
+    img.onload = () => {
+      URL.revokeObjectURL(objectUrl);
+      resolve(img);
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(objectUrl);
+      reject(new Error('圖片載入失敗'));
+    };
+    img.src = objectUrl;
+  });
+}
+
+async function handleOCR(file) {
+  const status = document.getElementById('ocr-status');
+  if (!file) return;
+  if (typeof Tesseract === 'undefined') {
+    if (status) status.textContent = 'Tesseract 未載入，請檢查網路。';
+    return;
+  }
+
+  if (status) {
+    status.textContent = '圖片優化與解析中…';
+    status.style.color = 'inherit';
+  }
+
+  const timeoutMsg = setTimeout(() => {
+    if (status) {
+      status.textContent = '圖片解析中，請稍候或手動輸入。';
+      status.style.color = 'orange';
+    }
+  }, 20000);
+
+  try {
+    const img = await loadImageFromFile(file);
+    const processed = await preprocessImage(img);
+    const worker = await getTesseractWorker();
+    const { data } = await worker.recognize(processed.dataUrl);
+
+    clearTimeout(timeoutMsg);
+
+    const rawText = (data?.text || '').trim();
+    console.log('[OCR raw text]', rawText);
+
+    const filteredWords = (data?.words || [])
+      .filter((word) => word?.text?.trim())
+      .filter((word) => word?.bbox?.y0 > processed.height * 0.12);
+
+    const result = smartOCR({
+      words: filteredWords,
+      fullText: rawText
+    });
+
+    if (status) {
+      status.textContent = result.message;
+      status.style.color = result.color || 'inherit';
+    }
+  } catch (err) {
+    clearTimeout(timeoutMsg);
+    if (status) {
+      status.textContent = `辨識失敗：${err.message || err}`;
+      status.style.color = 'red';
+    }
+  }
+}
+
 function initOcrUpload() {
   const input = document.getElementById('ocr-upload');
-  const status = document.getElementById('ocr-status');
   if (!input) return;
 
   input.addEventListener('change', async (ev) => {
     const file = ev.target.files?.[0];
     if (!file) return;
-    if (typeof Tesseract === 'undefined' || !Tesseract.recognize) {
-      if (status) status.textContent = 'Tesseract 未載入，請檢查網路或 CDN。';
-      input.value = '';
-      return;
-    }
-    if (status) status.textContent = '辨識中…';
-
     try {
-      // V3.9: 獲取圖片尺寸以進行頂部過濾
-      const img = new Image();
-      const reader = new FileReader();
-      
-      reader.onload = async (e) => {
-        img.src = e.target.result;
-        img.onload = async () => {
-          const { data } = await Tesseract.recognize(img, 'eng+chi_tra', { logger: () => {} });
-          
-          // 頂部過濾邏輯：排除高度前 12% 區域
-          const filteredWords = data.words.filter(word => {
-            const wordTop = word.bbox.y0;
-            return wordTop > (img.height * 0.12);
-          });
-          
-          smartOCR(filteredWords, img.height); // 傳遞過濾後的單詞數據和圖片高度
-          if (status) status.textContent = '智慧辨識完成，已自動填充欄位。';
-        };
-      };
-      reader.readAsDataURL(file);
-
-    } catch (err) {
-      if (status) status.textContent = `辨識失敗：${err.message || err}`;
+      await handleOCR(file);
     } finally {
       input.value = '';
     }
@@ -683,10 +766,10 @@ function initOcrUpload() {
  * 尋找 YYYY/MM/DD 或 YYYY年MM月DD日 格式
  */
 function detectDate(text) {
-  const regex = /(\d{4}[\/年]\d{1,2}[\/月]\d{1,2})/; // YYYY/MM/DD or YYYY年MM月DD
+  const regex = /\d{4}[\/年]\d{1,2}[\/月]\d{1,2}/;
   const match = text.match(regex);
   if (match) {
-    let dateStr = match[0].replace(/年|月/g, '-').replace(/\//g, '-'); // Normalize to YYYY-MM-DD
+    const dateStr = match[0].replace(/[年月]/g, '-').replace(/\//g, '-').replace(/日/g, '');
     const parts = dateStr.split('-');
     if (parts.length === 3) {
       const y = parts[0];
@@ -698,280 +781,355 @@ function detectDate(text) {
   return null;
 }
 
-function smartOCR(text) {
-  const status = document.getElementById('ocr-status');
-  
-  // 1. 日期偵測與剔除
-  const detectedDate = detectDate(text);
-  if (detectedDate) {
-    const dateEl = document.getElementById('f-date');
-    if (dateEl) dateEl.value = detectedDate;
-    // 從文字中移除已識別的日期，避免干擾後續數字提取
-    text = text.replace(/(\d{4}[\/\-年]\d{1,2}[\/\-月]\d{1,2}日?)/, '');
-  }
+function normalizeOcrWords(words) {
+  return (words || [])
+    .filter((word) => word?.text?.trim() && word?.bbox)
+    .map((word) => {
+      const text = word.text.trim();
+      const bbox = word.bbox;
+      return {
+        ...word,
+        text,
+        bbox,
+        centerX: (bbox.x0 + bbox.x1) / 2,
+        centerY: (bbox.y0 + bbox.y1) / 2,
+        width: Math.max(1, bbox.x1 - bbox.x0),
+        height: Math.max(1, bbox.y1 - bbox.y0)
+      };
+    });
+}
 
-  // 2. 辨識 App 類型 (關鍵字錨點判斷)
-  let appType = '';
-  if (text.includes('Distance') || text.includes('Duration') || text.includes('Average Pace')) appType = 'Running App';
-  else if (text.includes('Hikingbook') || text.includes('總爬升') || text.includes('平均速度')) appType = 'Hikingbook';
-  else if (text.includes('Pacer') || text.includes('公里') || text.includes('步數目標')) appType = 'Pacer';
+function detectOcrAppType(text) {
+  if (/Distance|Duration|Average Pace/i.test(text)) return 'Running App';
+  if (/Pacer|大卡|步數|步數目標/.test(text)) return 'Pacer';
+  if (/Hikingbook|總爬升|平均速度|距離/.test(text)) return 'Hikingbook';
+  return '';
+}
 
-  if (!appType) {
-    applyOcrNumbers(text);
-    return;
-  }
-
-  // 自動切換到對應類型
-  let workoutType = 'run';
-  if (appType === 'Hikingbook') workoutType = 'climb';
-  if (appType === 'Pacer') workoutType = 'walk';
-
+function activateOcrForm(workoutType) {
   currentFormType = workoutType;
   const selector = document.getElementById('add-type-selector');
   const form = document.getElementById('workout-form');
-  selector.style.display = 'none';
-  form.className = `active-form-${workoutType}`;
-  form.classList.remove('hidden');
+  if (selector) selector.style.display = 'none';
+  if (form) {
+    form.className = `active-form-${workoutType}`;
+    form.classList.remove('hidden');
+  }
   renderFields(workoutType);
-  
+
   const title = document.getElementById('add-view-title');
   if (title) title.innerText = `新增${typeLabel(workoutType)}紀錄 (OCR)`;
-  
+
   const colors = { run: '#ffebee', walk: '#fff9c4', climb: '#e3f2fd', gym: '#f3e5f5' };
   const overlay = document.getElementById('add-view');
   if (overlay) overlay.style.backgroundColor = colors[workoutType] || '';
   document.body.style.backgroundColor = colors[workoutType] || '';
+}
 
-  // 3. 雷達掃描模式 (Radar Scan Mode)
-  let successCount = 0;
+function findNearbyValue(words, keywords, valueType, options = {}) {
+  const {
+    directions = ['right'],
+    maxDistance = 220,
+    sameRowTolerance = 0.9,
+    sameColTolerance = 1.3,
+    preferDecimal = false
+  } = options;
 
-  /**
-   * 輔助函數：在關鍵字附近尋找數值 (基於單詞的空間位置)
-   * @param {Array} allWords - Tesseract 單詞數據 (每個單詞有 .text 和 .bbox)。
-   * @param {string|Array<string>} keywords - 要搜尋的關鍵字。
-   * @param {string} valueType - 'num' (浮點數), 'int' (整數), 'time' (時間格式)。
-   * @param {object} options - { searchDirection: 'above'|'below'|'left_right', maxDistance: number (像素) }
-   * @returns {string|null} 找到的數值。
-   */
-  const findValueSpatially = (allWords, keywords, valueType, options = {}) => {
-    const { searchDirection = 'left_right', maxDistance = 100 } = options; // maxDistance in pixels
+  const keywordList = Array.isArray(keywords) ? keywords : [keywords];
+  const normalizedWords = normalizeOcrWords(words);
+  const keywordRegex = new RegExp(keywordList.map((keyword) => keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|'), 'i');
+  const valueRegex = valueType === 'time'
+    ? /^\d{1,2}:\d{2}(?::\d{2})?$/
+    : valueType === 'int'
+      ? /^\d{1,6}$/
+      : /^\d+(?:\.\d+)?$/;
 
-    const keywordRegex = new RegExp(Array.isArray(keywords) ? keywords.join('|') : keywords, 'i');
-    const valueRegex = valueType === 'num' ? /\d+(\.\d+)?/ : valueType === 'int' ? /^\d+$/ : /\d{1,2}:\d{2}(?::\d{2})?/;
+  let bestMatch = null;
 
-    let bestMatch = null;
-    let minDistance = Infinity;
+  normalizedWords.forEach((anchor) => {
+    if (!keywordRegex.test(anchor.text)) return;
 
-    for (let i = 0; i < allWords.length; i++) {
-      const currentWord = allWords[i];
-      const keywordMatch = currentWord.text.match(keywordRegex);
+    normalizedWords.forEach((candidate) => {
+      if (candidate === anchor) return;
 
-      if (keywordMatch) {
-        const keywordBbox = currentWord.bbox;
+      const candidateText = candidate.text.replace(/,/g, '');
+      if (!valueRegex.test(candidateText)) return;
+      if (preferDecimal && !candidateText.includes('.')) return;
 
-        for (let j = 0; j < allWords.length; j++) {
-          if (i === j) continue; // 不與自身比較
+      const horizontalGap = candidate.centerX - anchor.centerX;
+      const verticalGap = candidate.centerY - anchor.centerY;
+      const sameRow = Math.abs(verticalGap) <= Math.max(anchor.height, candidate.height) * sameRowTolerance;
+      const sameCol = Math.abs(horizontalGap) <= Math.max(anchor.width, candidate.width) * sameColTolerance;
 
-          const potentialValueWord = allWords[j];
-          const valueMatch = potentialValueWord.text.match(valueRegex);
-
-          if (valueMatch) {
-            const valueBbox = potentialValueWord.bbox;
-
-            let distance = Infinity;
-            let isDirectionMatch = false;
-
-            // 根據方向計算距離
-            if (searchDirection === 'left_right') {
-              // 檢查是否大致在同一水平線上
-              if (Math.abs(keywordBbox.y0 - valueBbox.y0) < keywordBbox.height / 2) {
-                if (valueBbox.x0 > keywordBbox.x1) { // 數值在關鍵字右側
-                  distance = valueBbox.x0 - keywordBbox.x1;
-                  isDirectionMatch = true;
-                } else if (valueBbox.x1 < keywordBbox.x0) { // 數值在關鍵字左側
-                  distance = keywordBbox.x0 - valueBbox.x1;
-                  isDirectionMatch = true;
-                }
-              }
-            } else if (searchDirection === 'above') {
-              // 檢查數值是否在關鍵字上方
-              if (valueBbox.y1 < keywordBbox.y0) {
-                distance = keywordBbox.y0 - valueBbox.y1;
-                isDirectionMatch = true;
-              }
-            } else if (searchDirection === 'below') {
-              // 檢查數值是否在關鍵字下方
-              if (valueBbox.y0 > keywordBbox.y1) {
-                distance = valueBbox.y0 - keywordBbox.y1;
-                isDirectionMatch = true;
-              }
-            }
-
-            if (isDirectionMatch && distance < minDistance && distance <= maxDistance) {
-              minDistance = distance;
-              bestMatch = valueMatch[0];
-            }
-          }
+      let score = Infinity;
+      for (const direction of directions) {
+        if (direction === 'right' && sameRow && candidate.bbox.x0 >= anchor.bbox.x1) {
+          score = Math.min(score, (candidate.bbox.x0 - anchor.bbox.x1) + Math.abs(verticalGap) * 0.6);
+        }
+        if (direction === 'left' && sameRow && candidate.bbox.x1 <= anchor.bbox.x0) {
+          score = Math.min(score, (anchor.bbox.x0 - candidate.bbox.x1) + Math.abs(verticalGap) * 0.6);
+        }
+        if (direction === 'below' && sameCol && candidate.bbox.y0 >= anchor.bbox.y1) {
+          score = Math.min(score, (candidate.bbox.y0 - anchor.bbox.y1) + Math.abs(horizontalGap) * 0.35);
+        }
+        if (direction === 'above' && sameCol && candidate.bbox.y1 <= anchor.bbox.y0) {
+          score = Math.min(score, (anchor.bbox.y0 - candidate.bbox.y1) + Math.abs(horizontalGap) * 0.35);
         }
       }
-    }
-    return bestMatch;
+
+      if (score <= maxDistance && (!bestMatch || score < bestMatch.score)) {
+        bestMatch = { value: candidateText, score, word: candidate };
+      }
+    });
+  });
+
+  return bestMatch;
+}
+
+function parseDurationParts(durationText) {
+  if (!durationText) return null;
+  const parts = durationText.split(':').map((part) => Number(part));
+  if (parts.some((part) => !Number.isFinite(part))) return null;
+  if (parts.length === 3) return { hours: parts[0], minutes: parts[1], seconds: parts[2] };
+  if (parts.length === 2) return { hours: parts[0], minutes: parts[1], seconds: 0 };
+  return null;
+}
+
+function setFieldValue(id, value) {
+  const el = document.getElementById(id);
+  if (!el || value == null || value === '') return false;
+  el.value = value;
+  return true;
+}
+
+function findLargestStepCandidate(words, excludedValues = []) {
+  const exclusionSet = new Set(excludedValues.filter(Boolean).map((value) => String(value).replace(/\D/g, '')));
+  const normalizedWords = normalizeOcrWords(words);
+  const stepAnchors = normalizedWords.filter((word) => /步數|步數目標/i.test(word.text));
+
+  const candidates = normalizedWords
+    .filter((word) => /^\d{4,5}$/.test(word.text.replace(/[,\s]/g, '')))
+    .map((word) => {
+      const numericText = word.text.replace(/[,\s]/g, '');
+      const nearestAnchorDistance = stepAnchors.length
+        ? Math.min(...stepAnchors.map((anchor) => Math.abs(word.centerY - anchor.centerY) + Math.abs(word.centerX - anchor.centerX) * 0.2))
+        : 9999;
+      return {
+        word,
+        numericText,
+        fontScore: word.height * word.width,
+        anchorDistance: nearestAnchorDistance
+      };
+    })
+    .filter((candidate) => !exclusionSet.has(candidate.numericText))
+    .sort((a, b) => {
+      if (a.anchorDistance !== b.anchorDistance) return a.anchorDistance - b.anchorDistance;
+      if (b.fontScore !== a.fontScore) return b.fontScore - a.fontScore;
+      return Number(b.numericText) - Number(a.numericText);
+    });
+
+  if (candidates.length > 0) return candidates[0].numericText;
+
+  const fallback = normalizedWords
+    .filter((word) => /^\d{4,6}$/.test(word.text.replace(/[,\s]/g, '')))
+    .map((word) => word.text.replace(/[,\s]/g, ''))
+    .filter((value) => !exclusionSet.has(value))
+    .sort((a, b) => Number(b) - Number(a));
+
+  return fallback[0] || null;
+}
+
+function smartOCR({ words, fullText }) {
+  const status = document.getElementById('ocr-status');
+  const originalText = (fullText || '').replace(/\s+/g, ' ').trim();
+  const normalizedWords = normalizeOcrWords(words);
+
+  const detectedDate = detectDate(originalText);
+  if (detectedDate) {
+    setFieldValue('f-date', detectedDate);
+  }
+  const text = originalText.replace(/\d{4}[\/年]\d{1,2}[\/月]\d{1,2}日?/g, '').trim();
+  console.log('[OCR sanitized text]', text);
+
+  const appType = detectOcrAppType(text);
+
+  if (!appType) {
+    applyOcrNumbers(text);
+    return {
+      message: detectedDate ? '已抓到日期，其餘欄位請手動確認。' : '無法判斷 App 模板，請手動校對。',
+      color: detectedDate ? 'orange' : 'red'
+    };
+  }
+
+  let workoutType = 'run';
+  if (appType === 'Hikingbook') workoutType = 'climb';
+  if (appType === 'Pacer') workoutType = 'walk';
+  activateOcrForm(workoutType);
+
+  let successCount = 0;
+  const markSuccess = (fieldId, value) => {
+    if (setFieldValue(fieldId, value)) successCount++;
   };
 
-  // Running App 專屬雷達 (圖 1)
   if (appType === 'Running App') {
-    // 距離：尋找關鍵字 Distance 或 (km)，抓取其上方或左右最接近的浮點數
-    let dist = findValueSpatially(text, ['Distance', '(km)'], 'num', { searchDirection: 'above' });
-    if (!dist) dist = findValueSpatially(text, ['Distance', '(km)'], 'num', { searchDirection: 'left_right' });
-    if (dist) { document.getElementById('f-dist').value = dist; successCount++; }
+    const distMatch = findNearbyValue(normalizedWords, 'Distance', 'num', {
+      directions: ['left', 'right', 'above', 'below'],
+      maxDistance: 260,
+      preferDecimal: true
+    });
+    if (distMatch) markSuccess('f-dist', distMatch.value);
 
-    // 時/分：尋找 Duration 或格式 \d{2}:\d{2}:\d{2}。
-    let durationTime = findValueSpatially(text, 'Duration', 'time', { searchDirection: 'left_right' });
-    if (!durationTime) durationTime = findValueSpatially(text, 'Duration', 'time', { searchDirection: 'below' });
-    if (durationTime) {
-      const parts = durationTime.split(':');
-      if (parts.length === 3) { // XX:XX:XX
-        document.getElementById('f-hr').value = parseInt(parts[0]);
-        document.getElementById('f-min').value = parseInt(parts[1]);
-        successCount++;
-      } else if (parts.length === 2) { // XX:XX (可能是配速，但這裡優先處理時分)
-        document.getElementById('f-hr').value = parseInt(parts[0]);
-        document.getElementById('f-min').value = parseInt(parts[1]);
-        successCount++;
-      }
-    } else {
-      // Fallback: 在整個文本中尋找任何 XX:XX:XX 格式的時間
-      const fullTextForTime = text.map(w => w.text).join(' ');
-      const match = fullTextForTime.match(/\d{2}:\d{2}:\d{2}/);
-      if (match) {
-        const parts = match[0].split(':');
-        document.getElementById('f-hr').value = parseInt(parts[0]);
-        document.getElementById('f-min').value = parseInt(parts[1]);
-        successCount++;
-      }
+    const durationMatch = findNearbyValue(normalizedWords, 'Duration', 'time', {
+      directions: ['right', 'below', 'left'],
+      maxDistance: 320
+    });
+    const durationText = durationMatch?.value || text.match(/\d{1,2}:\d{2}:\d{2}/)?.[0] || '';
+    const duration = parseDurationParts(durationText);
+    if (duration) {
+      markSuccess('f-hr', duration.hours);
+      markSuccess('f-min', duration.minutes);
     }
 
-    // 平均配速：搜尋 Average Pace 抓取 XX:XX
-    const pace = findValueSpatially(text, ['Average Pace', 'Pace'], 'time', { searchDirection: 'left_right' });
-    if (pace) { document.getElementById('f-avg-pace').value = pace; successCount++; }
+    const paceMatch = findNearbyValue(normalizedWords, ['Average Pace', 'Pace'], 'time', {
+      directions: ['right', 'below'],
+      maxDistance: 260
+    });
+    if (paceMatch) markSuccess('f-avg-pace', paceMatch.value);
 
-    // 平均速度：搜尋 Average Speed 抓取後方第一個數字
-    const avgSpeed = findValueSpatially(text, ['Average Speed', 'Speed'], 'num', { searchDirection: 'left_right' });
-    if (avgSpeed) { document.getElementById('f-avg-speed').value = avgSpeed; successCount++; }
+    const avgSpeedMatch = findNearbyValue(normalizedWords, ['Average Speed', 'Speed'], 'num', {
+      directions: ['right', 'below'],
+      maxDistance: 260
+    });
+    if (avgSpeedMatch) markSuccess('f-avg-speed', avgSpeedMatch.value);
 
-    // 最快速度：搜尋 Max. Speed 抓取後方第一個數字
-    const maxSpeed = findValueSpatially(text, ['Max. Speed', 'Max Speed'], 'num', { searchDirection: 'left_right' });
-    if (maxSpeed) { document.getElementById('f-max-speed').value = maxSpeed; successCount++; }
+    const maxSpeedMatch = findNearbyValue(normalizedWords, ['Max. Speed', 'Max Speed'], 'num', {
+      directions: ['right', 'below'],
+      maxDistance: 260
+    });
+    if (maxSpeedMatch) markSuccess('f-max-speed', maxSpeedMatch.value);
 
-    // 累計爬升：搜尋 Elevation Gain 抓取後方第一個數字
-    const ascent = findValueSpatially(text, ['Elevation Gain', 'Gain'], 'int', { searchDirection: 'left_right' });
-    if (ascent) { document.getElementById('f-ascent').value = ascent; successCount++; }
+    const ascentMatch = findNearbyValue(normalizedWords, ['Elevation Gain', 'Gain'], 'int', {
+      directions: ['right', 'below'],
+      maxDistance: 260
+    });
+    if (ascentMatch) markSuccess('f-ascent', ascentMatch.value);
 
-    // 累計下降：搜尋 Elevation Loss 抓取後方第一個數字
-    const descent = findValueSpatially(text, ['Elevation Loss', 'Loss'], 'int', { searchDirection: 'left_right' });
-    if (descent) { document.getElementById('f-descent').value = descent; successCount++; }
+    const descentMatch = findNearbyValue(normalizedWords, ['Elevation Loss', 'Loss'], 'int', {
+      directions: ['right', 'below'],
+      maxDistance: 260
+    });
+    if (descentMatch) markSuccess('f-descent', descentMatch.value);
 
-    // 最高海拔：搜尋 Max. Elevation 抓取後方第一個數字
-    const maxAlt = findValueSpatially(text, ['Max. Elevation', 'Max Elevation'], 'int', { searchDirection: 'left_right' });
-    if (maxAlt) { document.getElementById('f-max-alt').value = maxAlt; successCount++; }
-  } 
-  // Hikingbook 專屬雷達 (圖 2)
-  else if (appType === 'Hikingbook') {
-    // 距離：尋找 距離 字樣，抓取其下方的數字
-    const dist = findValueSpatially(words, '距離', 'num', { searchDirection: 'below' });
-    if (dist) { document.getElementById('f-dist').value = dist; successCount++; }
+    const maxAltMatch = findNearbyValue(normalizedWords, ['Max. Elevation', 'Max Elevation'], 'int', {
+      directions: ['right', 'below'],
+      maxDistance: 260
+    });
+    if (maxAltMatch) markSuccess('f-max-alt', maxAltMatch.value);
+  } else if (appType === 'Hikingbook') {
+    const distMatch = findNearbyValue(normalizedWords, '距離', 'num', {
+      directions: ['below', 'right'],
+      maxDistance: 260,
+      preferDecimal: true
+    });
+    if (distMatch) markSuccess('f-dist', distMatch.value);
 
-    // 時：搜尋 時，抓取其前方的整數
-    const hr = findValueSpatially(words, '時', 'int', { searchDirection: 'left_right' });
-    if (hr) { document.getElementById('f-hr').value = hr; successCount++; }
+    const hourMatch = findNearbyValue(normalizedWords, '時', 'int', {
+      directions: ['left'],
+      maxDistance: 160
+    });
+    if (hourMatch) markSuccess('f-hr', hourMatch.value);
 
-    // 分：搜尋 分，抓取其前方的整數
-    const min = findValueSpatially(words, '分', 'int', { searchDirection: 'left_right' });
-    if (min) { document.getElementById('f-min').value = min; successCount++; }
+    const minuteMatch = findNearbyValue(normalizedWords, '分', 'int', {
+      directions: ['left'],
+      maxDistance: 160
+    });
+    if (minuteMatch) markSuccess('f-min', minuteMatch.value);
 
-    // 平均速度：尋找 平均速度 字樣，抓取其下方的數字
-    const avgSpeed = findValueSpatially(words, '平均速度', 'num', { searchDirection: 'below' });
-    if (avgSpeed) { document.getElementById('f-avg-speed').value = avgSpeed; successCount++; }
+    const avgSpeedMatch = findNearbyValue(normalizedWords, '平均速度', 'num', {
+      directions: ['below', 'right'],
+      maxDistance: 260
+    });
+    if (avgSpeedMatch) markSuccess('f-avg-speed', avgSpeedMatch.value);
 
-    // 累計爬升：搜尋 總爬升 ，抓取下方的數字
-    const ascent = findValueSpatially(words, '總爬升', 'int', { searchDirection: 'below' });
-    if (ascent) { document.getElementById('f-ascent').value = ascent; successCount++; }
+    const ascentMatch = findNearbyValue(normalizedWords, '總爬升', 'int', {
+      directions: ['below', 'right'],
+      maxDistance: 260
+    });
+    if (ascentMatch) markSuccess('f-ascent', ascentMatch.value);
 
-    // 累計下降： 搜尋 總下降， 抓取下方的數字
-    const descent = findValueSpatially(words, '總下降', 'int', { searchDirection: 'below' });
-    if (descent) { document.getElementById('f-descent').value = descent; successCount++; }
+    const descentMatch = findNearbyValue(normalizedWords, '總下降', 'int', {
+      directions: ['below', 'right'],
+      maxDistance: 260
+    });
+    if (descentMatch) markSuccess('f-descent', descentMatch.value);
 
-    // 高度落差：尋找 倒數第3個數字和倒數第2個數字，將倒數第3個數字減倒數第2個數字得出。
-    const allNumbersInText = fullText.match(/\d+/g) || [];
+    const allNumbersInText = text.match(/\d+/g) || [];
     if (allNumbersInText.length >= 3) {
-      const maxAlt = parseInt(allNumbersInText[allNumbersInText.length - 3]);
-      const minAlt = parseInt(allNumbersInText[allNumbersInText.length - 2]);
-      if (!isNaN(maxAlt) && !isNaN(minAlt)) {
-        document.getElementById('f-elev-gain').value = maxAlt - minAlt;
-        successCount++;
+      const maxAlt = Number(allNumbersInText[allNumbersInText.length - 3]);
+      const minAlt = Number(allNumbersInText[allNumbersInText.length - 2]);
+      if (Number.isFinite(maxAlt) && Number.isFinite(minAlt)) {
+        markSuccess('f-elev-gain', maxAlt - minAlt);
       }
     }
-  }
-  // Pacer 專屬雷達 (圖 3)
-  else if (appType === 'Pacer') {
-    // 距離：搜尋 公里，抓取下方的數字
-    const dist = findValueSpatially(words, '公里', 'num', { searchDirection: 'below' });
-    if (dist) { document.getElementById('f-dist').value = dist; successCount++; }
+  } else if (appType === 'Pacer') {
+    const distMatch = findNearbyValue(normalizedWords, ['公里', '距離'], 'num', {
+      directions: ['below', 'left', 'right'],
+      maxDistance: 260,
+      preferDecimal: true
+    });
+    if (distMatch) markSuccess('f-dist', distMatch.value);
 
-    // 時：搜尋 h，抓取前方的數字
-    const hr = findValueSpatially(words, 'h', 'int', { searchDirection: 'left_right' });
-    if (hr) { document.getElementById('f-hr').value = hr; successCount++; }
+    const hourMatch = findNearbyValue(normalizedWords, ['h', 'H'], 'int', {
+      directions: ['left'],
+      maxDistance: 120
+    });
+    if (hourMatch) markSuccess('f-hr', hourMatch.value);
 
-    // 分：搜尋 m，抓取前方的數字
-    const min = findValueSpatially(words, 'm', 'int', { searchDirection: 'left_right' });
-    if (min) { document.getElementById('f-min').value = min; successCount++; }
+    const minuteMatch = findNearbyValue(normalizedWords, ['m', 'M', '分'], 'int', {
+      directions: ['left'],
+      maxDistance: 120
+    });
+    if (minuteMatch) markSuccess('f-min', minuteMatch.value);
 
-    // 步數：尋找字體最大或位於 步數目標 上方的 4-5 位數整數。
-    let steps = findValueSpatially(words, '步數目標', 'int', { searchDirection: 'above' });
-    if (!steps) {
-      const allNums = fullText.match(/\d+/g) || [];
-      let maxSteps = 0;
-      for (const numStr of allNums) {
-        if (numStr.length >= 4 && numStr.length <= 6) {
-          const num = parseInt(numStr);
-          if (num > maxSteps) {
-            maxSteps = num;
-          }
-        }
-      }
-      if (maxSteps > 0) steps = maxSteps.toString();
+    const calorieMatch = findNearbyValue(normalizedWords, '大卡', 'int', {
+      directions: ['left', 'right'],
+      maxDistance: 160
+    });
+    if (calorieMatch) {
+      console.log('[OCR pacer calories]', calorieMatch.value);
     }
-    if (steps) {
-      document.getElementById('f-steps').value = steps;
-      successCount++;
-    }
+
+    const steps = findLargestStepCandidate(normalizedWords, [calorieMatch?.value]);
+    if (steps) markSuccess('f-steps', steps);
   }
 
-  // 4. 容錯處理
   if (successCount < 1) {
-    if (status) status.textContent = '辨識結果不完整，請手動校對。';
-    if (status) status.style.color = 'red';
-  } else {
-    // 檢查關鍵欄位 (距離、時、分) 是否為 0 或 null
-    const keyFields = ['f-dist', 'f-hr', 'f-min'];
-    let hasZeroOrNull = false;
-    for (const fieldId of keyFields) {
-      const el = document.getElementById(fieldId);
-      if (el && (el.value === '' || parseFloat(el.value) === 0)) {
-        hasZeroOrNull = true;
-        break;
-      }
-    }
-
-    if (hasZeroOrNull) {
-      if (status) status.textContent = '偵測到部分欄位偏移，請檢查距離與時間。';
-      if (status) status.style.color = 'orange';
-    } else {
-      if (status) status.textContent = `已偵測到 [${appType}] 數據，已自動填入。`;
-      if (status) status.style.color = 'inherit';
-    }
-    alert(`已偵測到 [${appType}] 數據，已自動填入。`);
+    return {
+      message: '辨識結果不完整，請手動校對。',
+      color: 'red'
+    };
   }
+
+  const keyFields = workoutType === 'walk'
+    ? ['f-dist', 'f-steps']
+    : ['f-dist', 'f-hr', 'f-min'];
+  const hasZeroOrNull = keyFields.some((fieldId) => {
+    const el = document.getElementById(fieldId);
+    return el && (el.value === '' || Number(el.value) === 0);
+  });
+
+  if (hasZeroOrNull) {
+    return {
+      message: `已偵測到 [${appType}]，但部分欄位可能偏移，請檢查距離與時間。`,
+      color: 'orange'
+    };
+  }
+
+  if (status) status.style.color = 'inherit';
+  return {
+    message: `已偵測到 [${appType}] 數據，已自動填入。`,
+    color: 'inherit'
+  };
 }
 
 function clearFormInputs() {

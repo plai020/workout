@@ -76,7 +76,13 @@ header {
 }
 
 /* 確保背景透明，露出底層 overlay 的顏色 */
-.modal, .modal-content, .form-container, #workout-form {
+.modal, .modal-content, .form-container, #workout-form, #overlay,
+.view-section.overlay .ocr-section,
+.view-section.overlay .backup-options,
+.view-section.overlay .admin-input-group,
+.view-section.overlay .filter-bar,
+.view-section.overlay .charts-scroll-area {
+    background: transparent !important;
     background-color: transparent !important;
     box-shadow: none !important;
 }
@@ -89,11 +95,12 @@ header {
     color: #333; /* 預設深色 */
 }
 
-/* 深色模式標題高對比度強化 */
+/* 深色模式標題高對比度強化 (V4.4) */
 body.dark-mode #add-view-title,
-body.dark-mode .view-section.overlay h2 {
+body.dark-mode .view-section.overlay h2,
+body.dark-mode #add-view h2 {
     color: #ffffff !important;
-    text-shadow: 0 2px 4px rgba(0,0,0,0.5);
+    text-shadow: 0 1px 4px rgba(0,0,0,0.65);
 }
 
 /* 彈出視窗內文字顏色確保 */
