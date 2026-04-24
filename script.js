@@ -766,11 +766,13 @@ async function handleOCR(file) {
     const processed = await preprocessImage(img);
     const statsFocusOriginal = cropImageRegion(img, 0.12, 0.5, 1.4);
     const topSummaryFocus = cropImageRegion(img, 0.17, 0.31, 3);
+    const hikingChartFocus = cropImageRegion(img, 0.4, 0.72, 2.2);
     const worker = await getTesseractWorker();
     const processedResult = await worker.recognize(processed.dataUrl);
     const originalResult = await worker.recognize(originalDataUrl);
     const focusOriginalResult = await worker.recognize(statsFocusOriginal);
     const topSummaryResult = await worker.recognize(topSummaryFocus);
+    const hikingChartResult = await worker.recognize(hikingChartFocus);
 
     clearTimeout(timeoutMsg);
 
@@ -778,14 +780,16 @@ async function handleOCR(file) {
     const originalText = (originalResult?.data?.text || '').trim();
     const focusOriginalText = (focusOriginalResult?.data?.text || '').trim();
     const topSummaryText = (topSummaryResult?.data?.text || '').trim();
-    const rawText = [processedText, originalText, focusOriginalText, topSummaryText].filter(Boolean).join('\n');
+    const hikingChartText = (hikingChartResult?.data?.text || '').trim();
+    const rawText = [processedText, originalText, focusOriginalText, topSummaryText, hikingChartText].filter(Boolean).join('\n');
     console.log('[OCR raw text]', rawText);
 
     const mergedWords = [
       ...(processedResult?.data?.words || []),
       ...(originalResult?.data?.words || []),
       ...(focusOriginalResult?.data?.words || []),
-      ...(topSummaryResult?.data?.words || [])
+      ...(topSummaryResult?.data?.words || []),
+      ...(hikingChartResult?.data?.words || [])
     ];
     const filteredWords = mergedWords
       .filter((word) => word?.text?.trim())
@@ -969,10 +973,10 @@ function extractHikingbookMetrics(text) {
     }
   }
 
-  const chartAltitudes = cleaned.match(/(?:^|\s)(\d{2,3})\s+(\d{2,3})(?:\s|$)/);
-  if (chartAltitudes) {
-    const high = Number(chartAltitudes[1]);
-    const low = Number(chartAltitudes[2]);
+  const allTwoToThreeDigits = (text.match(/\d{2,3}/g) || []).map(Number).filter(Number.isFinite);
+  if (allTwoToThreeDigits.length >= 3) {
+    const high = allTwoToThreeDigits[allTwoToThreeDigits.length - 3];
+    const low = allTwoToThreeDigits[allTwoToThreeDigits.length - 2];
     if (Number.isFinite(high) && Number.isFinite(low) && high > low) {
       metrics.elevGain = high - low;
     }
