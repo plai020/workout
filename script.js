@@ -882,8 +882,18 @@ function stripOcrNoise(text) {
     .trim();
 }
 
+function normalizeOcrNumber(value) {
+  if (value == null) return '';
+  return String(value)
+    .replace(/,+/g, '.')
+    .replace(/(\d)\.{2,}/g, '$1.')
+    .replace(/[^\d.:]/g, '')
+    .replace(/\.(?=.*\.)/g, '.');
+}
+
 function extractRunningMetrics(text) {
   const cleaned = stripOcrNoise(text);
+  const topTriplet = cleaned.match(/(\d+(?:\.\d+)?)\s+(\d{1,2}:\d{2}:\d{2})\s+(\d{2,4})/);
   const metrics = {
     distance: extractFirstMatch(text, [
       /Distance[\s\S]{0,18}?(\d+(?:\.\d+)?)/i,
@@ -903,14 +913,18 @@ function extractRunningMetrics(text) {
     maxAlt: extractLabeledValue(text, ['Max. Elevation', 'Max Elevation'], '\\d+')
   };
 
-  if (!metrics.distance) {
-    const topTriplet = cleaned.match(/(\d+(?:\.\d+)?)\s+(\d{1,2}:\d{2}:\d{2})\s+\d{2,4}/);
-    if (topTriplet) metrics.distance = topTriplet[1];
+  if (topTriplet?.[1]) {
+    metrics.distance = topTriplet[1];
+    metrics.duration = metrics.duration || topTriplet[2];
   }
 
   if (!metrics.duration) {
     const topDuration = cleaned.match(/(\d{1,2}:\d{2}:\d{2})/);
     if (topDuration) metrics.duration = topDuration[1];
+  }
+
+  if (metrics.distance && !metrics.distance.includes('.') && topTriplet?.[1]?.includes('.')) {
+    metrics.distance = topTriplet[1];
   }
 
   return metrics;
@@ -919,6 +933,17 @@ function extractRunningMetrics(text) {
 function extractHikingbookMetrics(text) {
   const cleaned = stripOcrNoise(text);
   const metrics = {};
+  const compact = cleaned.replace(/\s+/g, '');
+
+  const compactOrdered = compact.match(/距離時間(\d+(?:\.\d+)?)[,.\s]*(\d+)[.:：](\d{2})[,.\s]*總爬升總下降(\d+)[,.\s]*(\d+)[,.\s]*平均速度(?:消耗熱量)?(\d+(?:\.\d+)?)km\/h/i);
+  if (compactOrdered) {
+    metrics.distance = normalizeOcrNumber(compactOrdered[1]);
+    metrics.hours = compactOrdered[2];
+    metrics.minutes = compactOrdered[3];
+    metrics.ascent = compactOrdered[4];
+    metrics.descent = compactOrdered[5];
+    metrics.avgSpeed = normalizeOcrNumber(compactOrdered[6]);
+  }
 
   const orderedMatch = cleaned.match(/距離[\s\S]{0,24}?時間[\s\S]{0,36}?(\d+(?:\.\d+)?)[,.\s]+(\d+[.:：]\d{2})[,.\s]+(?:總\s*爬升[\s\S]{0,16})?(\d+)[,.\s]+(?:總\s*下\s*降[\s\S]{0,16})?(\d+)[,.\s]+(?:平均\s*速度[\s\S]{0,16})?(\d+(?:\.\d+)?)/);
   if (orderedMatch) {
@@ -952,6 +977,9 @@ function extractHikingbookMetrics(text) {
       metrics.elevGain = high - low;
     }
   }
+
+  metrics.distance = normalizeOcrNumber(metrics.distance);
+  metrics.avgSpeed = normalizeOcrNumber(metrics.avgSpeed);
 
   return metrics;
 }
