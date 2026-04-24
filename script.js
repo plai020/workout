@@ -691,7 +691,7 @@ async function preprocessImage(imgElement) {
   };
 }
 
-function cropImageRegion(imgElement, startYRatio = 0, endYRatio = 1) {
+function cropImageRegion(imgElement, startYRatio = 0, endYRatio = 1, scale = 1) {
   const canvas = document.createElement('canvas');
   const ctx = canvas.getContext('2d');
   const sourceWidth = imgElement.naturalWidth;
@@ -699,9 +699,9 @@ function cropImageRegion(imgElement, startYRatio = 0, endYRatio = 1) {
   const startY = Math.max(0, Math.floor(sourceHeight * startYRatio));
   const endY = Math.min(sourceHeight, Math.ceil(sourceHeight * endYRatio));
   const cropHeight = Math.max(1, endY - startY);
-  canvas.width = sourceWidth;
-  canvas.height = cropHeight;
-  ctx.drawImage(imgElement, 0, startY, sourceWidth, cropHeight, 0, 0, sourceWidth, cropHeight);
+  canvas.width = Math.max(1, Math.round(sourceWidth * scale));
+  canvas.height = Math.max(1, Math.round(cropHeight * scale));
+  ctx.drawImage(imgElement, 0, startY, sourceWidth, cropHeight, 0, 0, canvas.width, canvas.height);
   return canvas.toDataURL('image/png');
 }
 
@@ -764,18 +764,21 @@ async function handleOCR(file) {
     const img = await loadImageFromFile(file);
     const originalDataUrl = await readFileAsDataUrl(file);
     const processed = await preprocessImage(img);
-    const statsFocusOriginal = cropImageRegion(img, 0.12, 0.5);
+    const statsFocusOriginal = cropImageRegion(img, 0.12, 0.5, 1.4);
+    const topSummaryFocus = cropImageRegion(img, 0.18, 0.34, 2.2);
     const worker = await getTesseractWorker();
     const processedResult = await worker.recognize(processed.dataUrl);
     const originalResult = await worker.recognize(originalDataUrl);
     const focusOriginalResult = await worker.recognize(statsFocusOriginal);
+    const topSummaryResult = await worker.recognize(topSummaryFocus);
 
     clearTimeout(timeoutMsg);
 
     const processedText = (processedResult?.data?.text || '').trim();
     const originalText = (originalResult?.data?.text || '').trim();
     const focusOriginalText = (focusOriginalResult?.data?.text || '').trim();
-    const rawText = [processedText, originalText, focusOriginalText].filter(Boolean).join('\n');
+    const topSummaryText = (topSummaryResult?.data?.text || '').trim();
+    const rawText = [processedText, originalText, focusOriginalText, topSummaryText].filter(Boolean).join('\n');
     console.log('[OCR raw text]', rawText);
 
     const mergedWords = [
@@ -868,7 +871,17 @@ function applyOcrNumbers(text) {
   if (firstDecimal) setFieldValue('f-dist', firstDecimal);
 }
 
+function stripOcrNoise(text) {
+  return String(text || '')
+    .replace(/\d{4}\s*[\/\-年\.]\s*\d{1,2}\s*[\/\-月\.]\s*\d{1,2}\s*日?/g, ' ')
+    .replace(/^(?:\[\|\s*)?\d{1,2}:\d{2}(?:\s*,)?\s*(?:ol|oil|as|il|all)?\s*(?:4G|5G)?/gim, ' ')
+    .replace(/\b(?:4G|5G|GPS|Progress|kCal)\b/gi, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 function extractRunningMetrics(text) {
+  const cleaned = stripOcrNoise(text);
   const metrics = {
     distance: extractFirstMatch(text, [
       /Distance[\s\S]{0,18}?(\d+(?:\.\d+)?)/i,
@@ -889,29 +902,46 @@ function extractRunningMetrics(text) {
   };
 
   if (!metrics.distance) {
-    const topTriplet = text.match(/(\d+(?:\.\d+)?)\s+(\d{1,2}:\d{2}:\d{2})\s+\d{2,4}/);
+    const topTriplet = cleaned.match(/(\d+(?:\.\d+)?)\s+(\d{1,2}:\d{2}:\d{2})\s+\d{2,4}/);
     if (topTriplet) metrics.distance = topTriplet[1];
+  }
+
+  if (!metrics.duration) {
+    const topDuration = cleaned.match(/(\d{1,2}:\d{2}:\d{2})/);
+    if (topDuration) metrics.duration = topDuration[1];
   }
 
   return metrics;
 }
 
 function extractHikingbookMetrics(text) {
+  const cleaned = stripOcrNoise(text);
   const metrics = {
-    distance: extractLabeledValue(text, ['距離'], '\\d+(?:\\.\\d+)?'),
-    avgSpeed: extractLabeledValue(text, ['平均速度'], '\\d+(?:\\.\\d+)?'),
-    ascent: extractLabeledValue(text, ['總爬升'], '\\d+'),
-    descent: extractLabeledValue(text, ['總下降'], '\\d+')
+    distance: extractLabeledValue(cleaned, ['距離'], '\\d+(?:\\.\\d+)?'),
+    avgSpeed: extractLabeledValue(cleaned, ['平均速度'], '\\d+(?:\\.\\d+)?'),
+    ascent: extractLabeledValue(cleaned, ['總爬升'], '\\d+'),
+    descent: extractLabeledValue(cleaned, ['總下降'], '\\d+')
   };
 
-  const timeMatch = text.match(/時間[\s\S]{0,20}?(\d+)\s*時[\s\S]{0,12}?(\d+)\s*分/);
+  const orderedMatch = cleaned.match(/距離[\s\S]{0,20}?時間[\s\S]{0,30}?(\d+(?:\.\d+)?)[,.\s]+(\d+[.:：]\d{2})[,.\s]+(\d+)[,.\s]+(\d+)[,.\s]+(\d+(?:\.\d+)?)/);
+  if (orderedMatch) {
+    metrics.distance = metrics.distance || orderedMatch[1];
+    const hm = orderedMatch[2].replace('.', ':').split(':');
+    metrics.hours = hm[0];
+    metrics.minutes = hm[1];
+    metrics.ascent = metrics.ascent || orderedMatch[3];
+    metrics.descent = metrics.descent || orderedMatch[4];
+    metrics.avgSpeed = metrics.avgSpeed || orderedMatch[5];
+  }
+
+  const timeMatch = cleaned.match(/時間[\s\S]{0,20}?(\d+)\s*時[\s\S]{0,12}?(\d+)\s*分/);
   if (timeMatch) {
     metrics.hours = timeMatch[1];
     metrics.minutes = timeMatch[2];
   }
 
   if (!metrics.hours || !metrics.minutes) {
-    const compactTimeMatch = text.match(/(\d{1,2})[:：](\d{2})/);
+    const compactTimeMatch = cleaned.match(/(\d{1,2})[:：](\d{2})/);
     if (compactTimeMatch) {
       metrics.hours = compactTimeMatch[1];
       metrics.minutes = compactTimeMatch[2];
@@ -919,16 +949,16 @@ function extractHikingbookMetrics(text) {
   }
 
   if (!metrics.hours || !metrics.minutes) {
-    const brokenTimeMatch = text.match(/(\d{1,2})[.:：](\d{2})[.,]?/);
+    const brokenTimeMatch = cleaned.match(/(\d{1,2})[.:：](\d{2})[.,]?/);
     if (brokenTimeMatch) {
       metrics.hours = metrics.hours || brokenTimeMatch[1];
       metrics.minutes = metrics.minutes || brokenTimeMatch[2];
     }
   }
 
-  const allIntegers = (text.match(/\d+/g) || []).map(Number).filter(Number.isFinite);
+  const allIntegers = (cleaned.match(/\d+/g) || []).map(Number).filter(Number.isFinite);
   const chartCandidates = allIntegers.filter((value) => value >= 20 && value <= 500);
-  const allDecimals = text.match(/\d+(?:\.\d+)?/g) || [];
+  const allDecimals = cleaned.match(/\d+(?:\.\d+)?/g) || [];
   if ((!metrics.distance || !metrics.avgSpeed || !metrics.ascent || !metrics.descent) && allDecimals.length >= 5) {
     metrics.distance = metrics.distance || allDecimals[1];
     if (!metrics.hours || !metrics.minutes) {
@@ -939,7 +969,7 @@ function extractHikingbookMetrics(text) {
       }
     }
   }
-  const numericTokens = text.match(/\d+(?:\.\d+)?/g) || [];
+  const numericTokens = cleaned.match(/\d+(?:\.\d+)?/g) || [];
   if ((!metrics.ascent || !metrics.descent || !metrics.avgSpeed) && numericTokens.length >= 5) {
     const pureValues = numericTokens.filter((token) => !token.includes(':'));
     if (pureValues.length >= 5) {
@@ -955,44 +985,32 @@ function extractHikingbookMetrics(text) {
     if (diff > 0) metrics.elevGain = diff;
   }
 
-  if ((!metrics.ascent || !metrics.descent || !metrics.avgSpeed) && /距離[\s\S]{0,20}?時間[\s\S]{0,30}?(\d+(?:\.\d+)?)[,.\s]+(\d+[.:：]\d{2})[,.\s]+(\d+)[,.\s]+(\d+)[,.\s]+(\d+(?:\.\d+)?)/.test(text)) {
-    const orderedMatch = text.match(/距離[\s\S]{0,20}?時間[\s\S]{0,30}?(\d+(?:\.\d+)?)[,.\s]+(\d+[.:：]\d{2})[,.\s]+(\d+)[,.\s]+(\d+)[,.\s]+(\d+(?:\.\d+)?)/);
-    if (orderedMatch) {
-      metrics.distance = metrics.distance || orderedMatch[1];
-      const hm = orderedMatch[2].replace('.', ':').split(':');
-      metrics.hours = metrics.hours || hm[0];
-      metrics.minutes = metrics.minutes || hm[1];
-      metrics.ascent = metrics.ascent || orderedMatch[3];
-      metrics.descent = metrics.descent || orderedMatch[4];
-      metrics.avgSpeed = metrics.avgSpeed || orderedMatch[5];
-    }
-  }
-
   return metrics;
 }
 
 function extractPacerMetrics(text) {
+  const cleaned = stripOcrNoise(text);
   const metrics = {
-    distance: extractLabeledValue(text, ['公里'], '\\d+(?:\\.\\d+)?'),
-    calories: extractLabeledValue(text, ['大卡'], '\\d+'),
+    distance: extractLabeledValue(cleaned, ['公里'], '\\d+(?:\\.\\d+)?'),
+    calories: extractLabeledValue(cleaned, ['大卡'], '\\d+'),
     steps: extractFirstMatch(text, [
       /(\d{3,5})[\s\S]{0,20}?步數目標/,
       /步數目標[:：]?\s*\d+[\s\S]{0,20}?(\d{3,5})/
     ])
   };
 
-  const timeMatch = text.match(/(?:活躍時間)?[\s\S]{0,12}?(\d+)\s*h[\s\S]{0,8}?(\d+)\s*m/i);
+  const timeMatch = cleaned.match(/(?:活躍時間)?[\s\S]{0,12}?(\d+)\s*h[\s\S]{0,8}?(\d+)\s*m/i);
   if (timeMatch) {
     metrics.hours = timeMatch[1];
     metrics.minutes = timeMatch[2];
   }
 
-  const orderedSummary = text.match(/(\d{1,3})\s+(\d+)h\s*(\d+)m\s+(\d+(?:\.\d+)?)/i);
+  const orderedSummary = cleaned.match(/(\d{1,3})\s+(\d+)h\s*(\d+)m\s+(\d+(?:\.\d+)?)/i);
   if (orderedSummary) {
     metrics.calories = metrics.calories || orderedSummary[1];
     metrics.hours = metrics.hours || orderedSummary[2];
     metrics.minutes = metrics.minutes || orderedSummary[3];
-    metrics.distance = metrics.distance || orderedSummary[4];
+    metrics.distance = orderedSummary[4];
   }
 
   if (!metrics.date) {
@@ -1006,7 +1024,7 @@ function extractPacerMetrics(text) {
     }
   }
 
-  const stepCandidates = (text.match(/\d{3,5}/g) || [])
+  const stepCandidates = (cleaned.match(/\d{3,5}/g) || [])
     .filter((value) => value !== '10000' && value !== '2026');
   if (!metrics.steps && stepCandidates.length > 0) {
     metrics.steps = stepCandidates
