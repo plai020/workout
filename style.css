@@ -177,6 +177,13 @@ body.dark-mode input::placeholder {
     margin: 0;
 }
 
+.calendar-day,
+#current-month-year,
+#calendar-header,
+.month-nav-btn {
+    color: var(--text-color);
+}
+
 #calendar-grid {
     display: grid;
     grid-template-columns: repeat(7, 1fr);
@@ -198,6 +205,20 @@ body.dark-mode input::placeholder {
     box-shadow: 0 2px 6px rgba(0,0,0,0.08);
     height: 100%; /* 自動填滿網格 */
     min-height: 80px;
+}
+
+body.dark-mode #current-month-year,
+body.dark-mode #calendar-header,
+body.dark-mode .calendar-day,
+body.dark-mode .calendar-day span,
+body.dark-mode .month-nav-btn {
+    color: #ffffff !important;
+}
+
+body.dark-mode .calendar-day {
+    background: #1f1f1f;
+    border: 1px solid rgba(255,255,255,0.12);
+    box-shadow: 0 4px 10px rgba(0,0,0,0.35);
 }
 
 .day-dots {
@@ -480,22 +501,3 @@ body.dark-mode .card-gym { background: #311b92 !important; color: #ea80fc; }
 /* 馬錶警示 */
 .timer-blink { animation: blink-red 0.5s infinite; }
 @keyframes blink-red { 0% { background: var(--card-bg); } 50% { background: #ffcccc; } }
-
-/* V4.5 深色模式文字亮度補強 */
-.dark-mode #overlay h2 {
-    color: #FFFFFF !important; /* 強制標題為純白 */
-    text-shadow: 0 2px 4px rgba(0,0,0,0.5); /* 增加陰影提升辨識度 */
-    font-weight: bold;
-}
-
-/* 確保深色模式下的輸入格文字清晰 */
-.dark-mode input, .dark-mode select {
-    color: #333333 !important; /* 輸入文字為深色，防止與白底混色 */
-    background-color: #FFFFFF !important;
-}
-
-/* 修復背景變色時白色視窗遮擋問題 */
-.dark-mode .modal-content, .dark-mode .form-container {
-    background: transparent !important; /* 視窗容器變透明 */
-    box-shadow: none; /* 移除外陰影 */
-}

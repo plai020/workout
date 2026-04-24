@@ -182,6 +182,7 @@ function renderCalendar() {
   grid.innerHTML = '';
   const y = viewDate.getFullYear();
   const m = viewDate.getMonth();
+  const isDark = document.body.classList.contains('dark-mode');
   const header = document.getElementById('current-month-year');
   if (header) header.innerText = `${y}年 ${m + 1}月`;
 
@@ -210,7 +211,10 @@ function renderCalendar() {
 
     if (dayRecords.length > 0) {
       const score = dayIntensityScore(dayRecords);
-      dayDiv.style.backgroundColor = `rgba(77, 171, 247, ${0.12 + score * 0.55})`;
+      dayDiv.style.backgroundColor = isDark
+        ? `rgba(38, 84, 124, ${0.42 + score * 0.34})`
+        : `rgba(77, 171, 247, ${0.12 + score * 0.55})`;
+      dayDiv.style.color = isDark ? '#ffffff' : '';
 
       const dots = document.createElement('div');
       dots.className = 'day-dots';
@@ -693,115 +697,57 @@ function loadImageFromFile(file) {
   });
 }
 
-// --- V4.5 雷達掃描辨識核心 (針對三大 App 特徵優化) ---
 async function handleOCR(file) {
-    const status = document.getElementById('ocr-status');
-    status.innerText = "🕵️ 正在掃描圖片特徵...";
-    closeAllModals(); // 辨識時先關閉其他視窗
+  const status = document.getElementById('ocr-status');
+  if (!file) return;
+  if (typeof Tesseract === 'undefined') {
+    if (status) status.textContent = 'Tesseract 未載入，請檢查網路。';
+    return;
+  }
 
-    try {
-        // 使用畫布預處理圖片（黑白、高對比），提升辨識率
-        const preprocessedImg = await preprocessImage(file);
-        const { data: { text } } = await Tesseract.recognize(preprocessedImg, 'chi_tra+eng');
-        status.innerText = "✅ 辨識完成，正在對號入座...";
-        
-        // --- 第一步：日期優先偵測 ---
-        const dateMatch = text.match(/\d{4}[\/\-\.年]\d{1,2}[\/\-\.月]\d{1,2}/);
-        if (dateMatch) {
-            const dateInput = document.querySelector('#workout-form input[type="date"]');
-            if(dateInput) dateInput.value = dateMatch[0].replace(/年|月/g, '/').replace(/日/g, '');
-        }
+  if (status) {
+    status.textContent = '圖片優化與解析中…';
+    status.style.color = 'inherit';
+  }
 
-        // --- 第二步：判定 App 類型與應用模版 ---
-        let cleanText = text.replace(dateMatch ? dateMatch[0] : '', ''); // 剔除日期雜訊
-
-        if (text.includes('Distance') || text.includes('min/km')) {
-            status.innerText = "🏃 偵測到 Running App 模版";
-            applyRunningTemplate(cleanText);
-        } else if (text.includes('Hikingbook') || text.includes('總爬升')) {
-            status.innerText = "🏔️ 偵測到 Hikingbook 模版";
-            applyHikingTemplate(cleanText);
-        } else if (text.includes('活躍時間') || text.includes('步數目標')) {
-            status.innerText = "👣 偵測到 Pacer App 模版";
-            applyPacerTemplate(cleanText);
-        } else {
-            status.innerText = "⚠️ 無法判定 App 來源，嘗試通配辨識...";
-            applyGenericTemplate(cleanText);
-        }
-
-    } catch (error) {
-        status.innerText = "❌ 辨識失敗，請手動輸入。";
-        console.error(error);
+  const timeoutMsg = setTimeout(() => {
+    if (status) {
+      status.textContent = '圖片解析中，請稍候或手動輸入。';
+      status.style.color = 'orange';
     }
-}
+  }, 20000);
 
-// --- 🏃 Running App 雷達 (錨點：Distance, Duration, Pace) ---
-function applyRunningTemplate(text) {
-    // 距離：尋找符合 Distance 關鍵字後方的浮點數 (如 4.74)
-    const distanceInput = document.getElementById('f-dist');
-    if (distanceInput) distanceInput.value = findNumberAfterKeyword(text, 'Distance', true) || '';
+  try {
+    const img = await loadImageFromFile(file);
+    const processed = await preprocessImage(img);
+    const worker = await getTesseractWorker();
+    const { data } = await worker.recognize(processed.dataUrl);
 
-    // 時間：尋找 XX:XX:XX 格式
-    const durationMatch = text.match(/\d{1,2}:\d{2}:\d{2}/);
-    if (durationMatch) {
-        const timeArray = durationMatch[0].split(':');
-        document.getElementById('f-hr').value = timeArray[0];
-        document.getElementById('f-min').value = timeArray[1];
+    clearTimeout(timeoutMsg);
+
+    const rawText = (data?.text || '').trim();
+    console.log('[OCR raw text]', rawText);
+
+    const filteredWords = (data?.words || [])
+      .filter((word) => word?.text?.trim())
+      .filter((word) => word?.bbox?.y0 > processed.height * 0.03);
+
+    const result = smartOCR({
+      words: filteredWords,
+      fullText: rawText
+    });
+
+    if (status) {
+      status.textContent = result.message;
+      status.style.color = result.color || 'inherit';
     }
-
-    // 配速、速度：錨點搜尋
-    document.getElementById('f-pace').value = text.match(/\d{2}:\d{2}/) ? text.match(/\d{2}:\d{2}/)[0] : '';
-    document.getElementById('f-avg-speed').value = findNumberAfterKeyword(text, 'Average Speed', true) || '';
-    document.getElementById('f-max-speed').value = findNumberAfterKeyword(text, 'Max. Speed', true) || '';
-}
-
-// --- 🏔️ Hikingbook 雷達 (錨點：距離, 總爬升, 最高海拔) ---
-function applyHikingTemplate(text) {
-    // 距離：尋找『距離』字樣下方的純數字
-    document.getElementById('f-dist').value = findNumberAfterKeyword(text, '距離', true) || '';
-
-    // 時間：尋找『時』與『分』前方的整數
-    document.getElementById('f-hr').value = findNumberBeforeKeyword(text, '時') || '';
-    document.getElementById('f-min').value = findNumberBeforeKeyword(text, '分') || '';
-
-    // 爬升、下降：錨點搜尋
-    document.getElementById('f-up-gain').value = findNumberAfterKeyword(text, '總爬升', false) || '';
-    document.getElementById('f-up-loss').value = findNumberAfterKeyword(text, '總下陸', false) || ''; // Hikingbook 辨識可能錯字
-}
-
-// --- 👣 Pacer App 雷達 (錨點：大卡, 公里, 最大的數字) ---
-function applyPacerTemplate(text) {
-    // 大卡：錨點前方的純數字
-    document.getElementById('f-calories').value = findNumberBeforeKeyword(text, '大卡') || '';
-    // 公里：錨點前方的浮點數
-    document.getElementById('f-dist').value = findNumberBeforeKeyword(text, '公里') || '';
-
-    // 時/分：XXh XXm 格式偵測
-    const timeMatch = text.match(/(\d+)h\s*(\d+)m/);
-    if (timeMatch) {
-        document.getElementById('f-hr').value = timeMatch[1];
-        document.getElementById('f-min').value = timeMatch[2];
+  } catch (err) {
+    clearTimeout(timeoutMsg);
+    if (status) {
+      status.textContent = `辨識失敗：${err.message || err}`;
+      status.style.color = 'red';
     }
-
-    // 總步數：尋找圖片中『最大的連續整數』（通常為步數）
-    const allInts = text.match(/\b\d{3,5}\b/g) || [];
-    if (allInts.length > 0) {
-        document.getElementById('f-steps').value = Math.max(...allInts.map(Number));
-    }
-}
-
-// --- OCR 輔助函數：關鍵字搜尋 ---
-function findNumberAfterKeyword(text, keyword, isFloat = false) {
-    // 建立一個正規表達式：尋找關鍵字後的第n個數字
-    const regex = isFloat ? new RegExp(`${keyword}[^\\d]*(\\d+\\.\\d+)`, 'i') : new RegExp(`${keyword}[^\\d]*(\\d+)`, 'i');
-    const match = text.match(regex);
-    return match ? match[1] : null;
-}
-
-function findNumberBeforeKeyword(text, keyword) {
-    const regex = new RegExp(`(\\d+)\\s*${keyword}`, 'i');
-    const match = text.match(regex);
-    return match ? match[1] : null;
+  }
 }
 
 function initOcrUpload() {
@@ -837,6 +783,95 @@ function detectDate(text) {
     }
   }
   return null;
+}
+
+function escapeRegex(text) {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function extractFirstMatch(text, patterns, mapper = null) {
+  const list = Array.isArray(patterns) ? patterns : [patterns];
+  for (const pattern of list) {
+    const match = text.match(pattern);
+    if (!match) continue;
+    const value = mapper ? mapper(match) : (match[1] ?? match[0]);
+    if (value != null && value !== '') return value;
+  }
+  return null;
+}
+
+function extractLabeledValue(text, labels, valuePattern, flags = 'i') {
+  const labelPattern = (Array.isArray(labels) ? labels : [labels]).map(escapeRegex).join('|');
+  return extractFirstMatch(text, [
+    new RegExp(`(?:${labelPattern})[\\s\\S]{0,24}?(${valuePattern})`, flags),
+    new RegExp(`(${valuePattern})[\\s\\S]{0,24}?(?:${labelPattern})`, flags)
+  ]);
+}
+
+function applyOcrNumbers(text) {
+  const numbers = (text.match(/\d+(?:\.\d+)?/g) || []).filter(Boolean);
+  const firstDecimal = numbers.find((value) => value.includes('.'));
+  if (firstDecimal) setFieldValue('f-dist', firstDecimal);
+}
+
+function extractRunningMetrics(text) {
+  return {
+    distance: extractLabeledValue(text, ['Distance', 'Distance (km)'], '\\d+(?:\\.\\d+)?'),
+    duration: extractFirstMatch(text, [
+      /Duration[\s\S]{0,20}?(\d{1,2}:\d{2}:\d{2})/i,
+      /(\d{1,2}:\d{2}:\d{2})[\s\S]{0,20}?Duration/i
+    ]),
+    avgPace: extractLabeledValue(text, ['Average Pace', 'Pace'], '\\d{1,2}:\\d{2}'),
+    avgSpeed: extractLabeledValue(text, ['Average Speed'], '\\d+(?:\\.\\d+)?'),
+    maxSpeed: extractLabeledValue(text, ['Max. Speed', 'Max Speed'], '\\d+(?:\\.\\d+)?'),
+    ascent: extractLabeledValue(text, ['Elevation Gain'], '\\d+'),
+    descent: extractLabeledValue(text, ['Elevation Loss'], '\\d+'),
+    maxAlt: extractLabeledValue(text, ['Max. Elevation', 'Max Elevation'], '\\d+')
+  };
+}
+
+function extractHikingbookMetrics(text) {
+  const metrics = {
+    distance: extractLabeledValue(text, ['距離'], '\\d+(?:\\.\\d+)?'),
+    avgSpeed: extractLabeledValue(text, ['平均速度'], '\\d+(?:\\.\\d+)?'),
+    ascent: extractLabeledValue(text, ['總爬升'], '\\d+'),
+    descent: extractLabeledValue(text, ['總下降'], '\\d+')
+  };
+
+  const timeMatch = text.match(/時間[\s\S]{0,20}?(\d+)\s*時[\s\S]{0,12}?(\d+)\s*分/);
+  if (timeMatch) {
+    metrics.hours = timeMatch[1];
+    metrics.minutes = timeMatch[2];
+  }
+
+  const allIntegers = (text.match(/\d+/g) || []).map(Number).filter(Number.isFinite);
+  const chartCandidates = allIntegers.filter((value) => value >= 20 && value <= 500);
+  if (chartCandidates.length >= 2) {
+    const lastTwo = chartCandidates.slice(-2);
+    const diff = Math.abs(lastTwo[0] - lastTwo[1]);
+    if (diff > 0) metrics.elevGain = diff;
+  }
+
+  return metrics;
+}
+
+function extractPacerMetrics(text) {
+  const metrics = {
+    distance: extractLabeledValue(text, ['公里'], '\\d+(?:\\.\\d+)?'),
+    calories: extractLabeledValue(text, ['大卡'], '\\d+'),
+    steps: extractFirstMatch(text, [
+      /(\d{3,5})[\s\S]{0,20}?步數目標/,
+      /步數目標[:：]?\s*\d+[\s\S]{0,20}?(\d{3,5})/
+    ])
+  };
+
+  const timeMatch = text.match(/(?:活躍時間)?[\s\S]{0,12}?(\d+)\s*h[\s\S]{0,8}?(\d+)\s*m/i);
+  if (timeMatch) {
+    metrics.hours = timeMatch[1];
+    metrics.minutes = timeMatch[2];
+  }
+
+  return metrics;
 }
 
 function normalizeOcrWords(words) {
@@ -999,7 +1034,8 @@ function findLargestStepCandidate(words, excludedValues = []) {
 
 function smartOCR({ words, fullText }) {
   const status = document.getElementById('ocr-status');
-  const originalText = (fullText || '').replace(/\s+/g, ' ').trim();
+  const rawText = (fullText || '').trim();
+  const originalText = rawText.replace(/\s+/g, ' ').trim();
   const normalizedWords = normalizeOcrWords(words);
 
   const detectedDate = detectDate(originalText);
@@ -1030,16 +1066,17 @@ function smartOCR({ words, fullText }) {
   };
 
   if (appType === 'Running App') {
-    const distMatch = findNearbyValue(normalizedWords, 'Distance', 'num', {
+    const metrics = extractRunningMetrics(rawText);
+    const distMatch = metrics.distance ? { value: metrics.distance } : findNearbyValue(normalizedWords, 'Distance', 'num', {
       directions: ['left', 'right', 'above', 'below'],
-      maxDistance: 260,
+      maxDistance: 320,
       preferDecimal: true
     });
     if (distMatch) markSuccess('f-dist', distMatch.value);
 
-    const durationMatch = findNearbyValue(normalizedWords, 'Duration', 'time', {
+    const durationMatch = metrics.duration ? { value: metrics.duration } : findNearbyValue(normalizedWords, 'Duration', 'time', {
       directions: ['right', 'below', 'left'],
-      maxDistance: 320
+      maxDistance: 360
     });
     const durationText = durationMatch?.value || text.match(/\d{1,2}:\d{2}:\d{2}/)?.[0] || '';
     const duration = parseDurationParts(durationText);
@@ -1048,108 +1085,103 @@ function smartOCR({ words, fullText }) {
       markSuccess('f-min', duration.minutes);
     }
 
-    const paceMatch = findNearbyValue(normalizedWords, ['Average Pace', 'Pace'], 'time', {
+    const paceMatch = metrics.avgPace ? { value: metrics.avgPace } : findNearbyValue(normalizedWords, ['Average Pace', 'Pace'], 'time', {
       directions: ['right', 'below'],
       maxDistance: 260
     });
     if (paceMatch) markSuccess('f-avg-pace', paceMatch.value);
 
-    const avgSpeedMatch = findNearbyValue(normalizedWords, ['Average Speed', 'Speed'], 'num', {
+    const avgSpeedMatch = metrics.avgSpeed ? { value: metrics.avgSpeed } : findNearbyValue(normalizedWords, ['Average Speed', 'Speed'], 'num', {
       directions: ['right', 'below'],
       maxDistance: 260
     });
     if (avgSpeedMatch) markSuccess('f-avg-speed', avgSpeedMatch.value);
 
-    const maxSpeedMatch = findNearbyValue(normalizedWords, ['Max. Speed', 'Max Speed'], 'num', {
+    const maxSpeedMatch = metrics.maxSpeed ? { value: metrics.maxSpeed } : findNearbyValue(normalizedWords, ['Max. Speed', 'Max Speed'], 'num', {
       directions: ['right', 'below'],
       maxDistance: 260
     });
     if (maxSpeedMatch) markSuccess('f-max-speed', maxSpeedMatch.value);
 
-    const ascentMatch = findNearbyValue(normalizedWords, ['Elevation Gain', 'Gain'], 'int', {
+    const ascentMatch = metrics.ascent ? { value: metrics.ascent } : findNearbyValue(normalizedWords, ['Elevation Gain', 'Gain'], 'int', {
       directions: ['right', 'below'],
       maxDistance: 260
     });
     if (ascentMatch) markSuccess('f-ascent', ascentMatch.value);
 
-    const descentMatch = findNearbyValue(normalizedWords, ['Elevation Loss', 'Loss'], 'int', {
+    const descentMatch = metrics.descent ? { value: metrics.descent } : findNearbyValue(normalizedWords, ['Elevation Loss', 'Loss'], 'int', {
       directions: ['right', 'below'],
       maxDistance: 260
     });
     if (descentMatch) markSuccess('f-descent', descentMatch.value);
 
-    const maxAltMatch = findNearbyValue(normalizedWords, ['Max. Elevation', 'Max Elevation'], 'int', {
+    const maxAltMatch = metrics.maxAlt ? { value: metrics.maxAlt } : findNearbyValue(normalizedWords, ['Max. Elevation', 'Max Elevation'], 'int', {
       directions: ['right', 'below'],
       maxDistance: 260
     });
     if (maxAltMatch) markSuccess('f-max-alt', maxAltMatch.value);
   } else if (appType === 'Hikingbook') {
-    const distMatch = findNearbyValue(normalizedWords, '距離', 'num', {
+    const metrics = extractHikingbookMetrics(rawText);
+    const distMatch = metrics.distance ? { value: metrics.distance } : findNearbyValue(normalizedWords, '距離', 'num', {
       directions: ['below', 'right'],
       maxDistance: 260,
       preferDecimal: true
     });
     if (distMatch) markSuccess('f-dist', distMatch.value);
 
-    const hourMatch = findNearbyValue(normalizedWords, '時', 'int', {
+    const hourMatch = metrics.hours ? { value: metrics.hours } : findNearbyValue(normalizedWords, '時', 'int', {
       directions: ['left'],
       maxDistance: 160
     });
     if (hourMatch) markSuccess('f-hr', hourMatch.value);
 
-    const minuteMatch = findNearbyValue(normalizedWords, '分', 'int', {
+    const minuteMatch = metrics.minutes ? { value: metrics.minutes } : findNearbyValue(normalizedWords, '分', 'int', {
       directions: ['left'],
       maxDistance: 160
     });
     if (minuteMatch) markSuccess('f-min', minuteMatch.value);
 
-    const avgSpeedMatch = findNearbyValue(normalizedWords, '平均速度', 'num', {
+    const avgSpeedMatch = metrics.avgSpeed ? { value: metrics.avgSpeed } : findNearbyValue(normalizedWords, '平均速度', 'num', {
       directions: ['below', 'right'],
       maxDistance: 260
     });
     if (avgSpeedMatch) markSuccess('f-avg-speed', avgSpeedMatch.value);
 
-    const ascentMatch = findNearbyValue(normalizedWords, '總爬升', 'int', {
+    const ascentMatch = metrics.ascent ? { value: metrics.ascent } : findNearbyValue(normalizedWords, '總爬升', 'int', {
       directions: ['below', 'right'],
       maxDistance: 260
     });
     if (ascentMatch) markSuccess('f-ascent', ascentMatch.value);
 
-    const descentMatch = findNearbyValue(normalizedWords, '總下降', 'int', {
+    const descentMatch = metrics.descent ? { value: metrics.descent } : findNearbyValue(normalizedWords, '總下降', 'int', {
       directions: ['below', 'right'],
       maxDistance: 260
     });
     if (descentMatch) markSuccess('f-descent', descentMatch.value);
 
-    const allNumbersInText = text.match(/\d+/g) || [];
-    if (allNumbersInText.length >= 3) {
-      const maxAlt = Number(allNumbersInText[allNumbersInText.length - 3]);
-      const minAlt = Number(allNumbersInText[allNumbersInText.length - 2]);
-      if (Number.isFinite(maxAlt) && Number.isFinite(minAlt)) {
-        markSuccess('f-elev-gain', maxAlt - minAlt);
-      }
-    }
+    if (metrics.elevGain) markSuccess('f-elev-gain', metrics.elevGain);
   } else if (appType === 'Pacer') {
-    const distMatch = findNearbyValue(normalizedWords, ['公里', '距離'], 'num', {
+    const metrics = extractPacerMetrics(rawText);
+    const distMatch = metrics.distance ? { value: metrics.distance } : findNearbyValue(normalizedWords, ['公里', '距離'], 'num', {
       directions: ['below', 'left', 'right'],
       maxDistance: 260,
       preferDecimal: true
     });
     if (distMatch) markSuccess('f-dist', distMatch.value);
 
-    const hourMatch = findNearbyValue(normalizedWords, ['h', 'H'], 'int', {
+    const hourMatch = metrics.hours ? { value: metrics.hours } : findNearbyValue(normalizedWords, ['h', 'H'], 'int', {
       directions: ['left'],
       maxDistance: 120
     });
     if (hourMatch) markSuccess('f-hr', hourMatch.value);
 
-    const minuteMatch = findNearbyValue(normalizedWords, ['m', 'M', '分'], 'int', {
+    const minuteMatch = metrics.minutes ? { value: metrics.minutes } : findNearbyValue(normalizedWords, ['m', 'M', '分'], 'int', {
       directions: ['left'],
       maxDistance: 120
     });
     if (minuteMatch) markSuccess('f-min', minuteMatch.value);
 
-    const calorieMatch = findNearbyValue(normalizedWords, '大卡', 'int', {
+    const calorieMatch = metrics.calories ? { value: metrics.calories } : findNearbyValue(normalizedWords, '大卡', 'int', {
       directions: ['left', 'right'],
       maxDistance: 160
     });
@@ -1157,7 +1189,7 @@ function smartOCR({ words, fullText }) {
       console.log('[OCR pacer calories]', calorieMatch.value);
     }
 
-    const steps = findLargestStepCandidate(normalizedWords, [calorieMatch?.value]);
+    const steps = metrics.steps || findLargestStepCandidate(normalizedWords, [calorieMatch?.value, '10000']);
     if (steps) markSuccess('f-steps', steps);
   }
 
@@ -1342,9 +1374,11 @@ function initTheme() {
   const btn = document.getElementById('theme-toggle');
   const saved = localStorage.getItem('theme');
   if (saved === 'dark') document.body.classList.add('dark-mode');
+  renderCalendar();
   btn?.addEventListener('click', () => {
     document.body.classList.toggle('dark-mode');
     localStorage.setItem('theme', document.body.classList.contains('dark-mode') ? 'dark' : 'light');
+    renderCalendar();
   });
 }
 
