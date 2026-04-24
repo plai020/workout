@@ -338,10 +338,7 @@ function editRecord(id) {
   const title = document.getElementById('add-view-title');
   if (title) title.innerText = `${typeLabel(r.type)}紀錄編輯`;
   
-  const colors = { run: '#ffebee', walk: '#fff9c4', climb: '#e3f2fd', gym: '#f3e5f5' };
-  const overlay = document.getElementById('add-view');
-  if (overlay) overlay.style.backgroundColor = colors[r.type] || '';
-  document.body.style.backgroundColor = colors[r.type] || '';
+  applyOverlayTheme(r.type);
 
   const dateEl = document.getElementById('f-date');
   if (dateEl) dateEl.value = r.date;
@@ -425,10 +422,7 @@ function initForm() {
       const title = document.getElementById('add-view-title');
       if (title) title.innerText = `新增${typeLabel(type)}紀錄`;
       
-      const colors = { run: '#ffebee', walk: '#fff9c4', climb: '#e3f2fd', gym: '#f3e5f5' };
-      const overlay = document.getElementById('add-view');
-      if (overlay) overlay.style.backgroundColor = colors[type] || '';
-      document.body.style.backgroundColor = colors[type] || '';
+      applyOverlayTheme(type);
     };
   });
 }
@@ -499,6 +493,32 @@ function formatPace(input) {
 
 function escapeAttr(s) {
   return String(s).replace(/"/g, '&quot;');
+}
+
+function getOverlayColors(type) {
+  const isDark = document.body.classList.contains('dark-mode');
+  if (isDark) {
+    return {
+      run: '#241516',
+      walk: '#252113',
+      climb: '#132235',
+      gym: '#22172a'
+    };
+  }
+  return {
+    run: '#ffebee',
+    walk: '#fff9c4',
+    climb: '#e3f2fd',
+    gym: '#f3e5f5'
+  };
+}
+
+function applyOverlayTheme(type) {
+  const colors = getOverlayColors(type);
+  const overlay = document.getElementById('add-view');
+  const color = colors[type] || '';
+  if (overlay) overlay.style.backgroundColor = color;
+  document.body.style.backgroundColor = color;
 }
 
 function updateActions() {
@@ -770,10 +790,10 @@ function initOcrUpload() {
  * 尋找 YYYY/MM/DD 或 YYYY年MM月DD日 格式
  */
 function detectDate(text) {
-  const regex = /\d{4}[\/年]\d{1,2}[\/月]\d{1,2}/;
+  const regex = /\d{4}[\/\-年\.]\d{1,2}[\/\-月\.]\d{1,2}/;
   const match = text.match(regex);
   if (match) {
-    const dateStr = match[0].replace(/[年月]/g, '-').replace(/\//g, '-').replace(/日/g, '');
+    const dateStr = match[0].replace(/[年月]/g, '-').replace(/[\/\.]/g, '-').replace(/日/g, '');
     const parts = dateStr.split('-');
     if (parts.length === 3) {
       const y = parts[0];
@@ -816,10 +836,15 @@ function applyOcrNumbers(text) {
 
 function extractRunningMetrics(text) {
   return {
-    distance: extractLabeledValue(text, ['Distance', 'Distance (km)'], '\\d+(?:\\.\\d+)?'),
+    distance: extractFirstMatch(text, [
+      /Distance[\s\S]{0,18}?(\d+(?:\.\d+)?)/i,
+      /(\d+(?:\.\d+)?)\s*Distance\s*\(?.{0,6}\)?/i,
+      /RUNNING[\s\S]{0,80}?(\d+(?:\.\d+)?)\s+[\d:]{4,8}\s+\d{2,4}/i
+    ]),
     duration: extractFirstMatch(text, [
       /Duration[\s\S]{0,20}?(\d{1,2}:\d{2}:\d{2})/i,
-      /(\d{1,2}:\d{2}:\d{2})[\s\S]{0,20}?Duration/i
+      /(\d{1,2}:\d{2}:\d{2})[\s\S]{0,20}?Duration/i,
+      /RUNNING[\s\S]{0,120}?(\d{1,2}:\d{2}:\d{2})/i
     ]),
     avgPace: extractLabeledValue(text, ['Average Pace', 'Pace'], '\\d{1,2}:\\d{2}'),
     avgSpeed: extractLabeledValue(text, ['Average Speed'], '\\d+(?:\\.\\d+)?'),
@@ -874,6 +899,21 @@ function extractPacerMetrics(text) {
   return metrics;
 }
 
+function inferOcrAppType(rawText, normalizedText) {
+  const combined = `${rawText} ${normalizedText}`.replace(/\s+/g, ' ').trim();
+  const runningMetrics = extractRunningMetrics(combined);
+  const hikingMetrics = extractHikingbookMetrics(combined);
+  const pacerMetrics = extractPacerMetrics(combined);
+
+  if (/Distance|Duration|Average Pace|Average Speed|Max\.?\s*Speed|Elevation/i.test(combined)) return 'Running App';
+  if (runningMetrics.distance && (runningMetrics.duration || runningMetrics.avgPace || runningMetrics.avgSpeed)) return 'Running App';
+  if (/步數目標|活躍時間|大卡|公里|202\d年\d{1,2}月\d{1,2}日/.test(combined) && (pacerMetrics.steps || pacerMetrics.minutes || pacerMetrics.calories)) return 'Pacer';
+  if (pacerMetrics.distance && (pacerMetrics.steps || pacerMetrics.minutes || pacerMetrics.calories)) return 'Pacer';
+  if (/總爬升|總下降|平均速度|新增路況回報|km\/h|kCal|時間|距離/.test(combined) && (hikingMetrics.ascent || hikingMetrics.descent || hikingMetrics.avgSpeed || hikingMetrics.hours)) return 'Hikingbook';
+  if (hikingMetrics.distance && (hikingMetrics.ascent || hikingMetrics.descent || hikingMetrics.avgSpeed || hikingMetrics.hours)) return 'Hikingbook';
+  return '';
+}
+
 function normalizeOcrWords(words) {
   return (words || [])
     .filter((word) => word?.text?.trim() && word?.bbox)
@@ -913,10 +953,7 @@ function activateOcrForm(workoutType) {
   const title = document.getElementById('add-view-title');
   if (title) title.innerText = `新增${typeLabel(workoutType)}紀錄 (OCR)`;
 
-  const colors = { run: '#ffebee', walk: '#fff9c4', climb: '#e3f2fd', gym: '#f3e5f5' };
-  const overlay = document.getElementById('add-view');
-  if (overlay) overlay.style.backgroundColor = colors[workoutType] || '';
-  document.body.style.backgroundColor = colors[workoutType] || '';
+  applyOverlayTheme(workoutType);
 }
 
 function findNearbyValue(words, keywords, valueType, options = {}) {
@@ -1037,15 +1074,12 @@ function smartOCR({ words, fullText }) {
   const rawText = (fullText || '').trim();
   const originalText = rawText.replace(/\s+/g, ' ').trim();
   const normalizedWords = normalizeOcrWords(words);
-
-  const detectedDate = detectDate(originalText);
-  if (detectedDate) {
-    setFieldValue('f-date', detectedDate);
-  }
+  const wordText = normalizedWords.map((word) => word.text).join(' ');
+  const detectedDate = detectDate(originalText) || detectDate(wordText);
   const text = originalText.replace(/\d{4}[\/年]\d{1,2}[\/月]\d{1,2}日?/g, '').trim();
   console.log('[OCR sanitized text]', text);
 
-  const appType = detectOcrAppType(text);
+  const appType = detectOcrAppType(text) || inferOcrAppType(rawText, wordText);
 
   if (!appType) {
     applyOcrNumbers(text);
@@ -1059,6 +1093,7 @@ function smartOCR({ words, fullText }) {
   if (appType === 'Hikingbook') workoutType = 'climb';
   if (appType === 'Pacer') workoutType = 'walk';
   activateOcrForm(workoutType);
+  if (detectedDate) setFieldValue('f-date', detectedDate);
 
   let successCount = 0;
   const markSuccess = (fieldId, value) => {

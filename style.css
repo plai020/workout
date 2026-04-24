@@ -120,7 +120,7 @@ body.dark-mode .type-btn .label {
 body.dark-mode input,
 body.dark-mode select {
     border: 2px solid rgba(255,255,255,0.3) !important;
-    background-color: rgba(255,255,255,0.05) !important;
+    background-color: rgba(18,18,18,0.88) !important;
     color: #ffffff !important;
 }
 
@@ -292,6 +292,33 @@ input, select, .save-btn, .ocr-btn, .timer-btn, .clear-ocr-btn, .manage-action-b
     text-align: center;
     cursor: pointer;
     box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+}
+
+body.dark-mode #add-view,
+body.dark-mode #workout-form,
+body.dark-mode #form-fields,
+body.dark-mode #add-type-selector,
+body.dark-mode #ocr-status,
+body.dark-mode #add-view input,
+body.dark-mode #add-view select,
+body.dark-mode #add-view .close-overlay,
+body.dark-mode #add-view .type-btn .label,
+body.dark-mode #add-view .type-btn .emoji,
+body.dark-mode #add-view .ocr-section,
+body.dark-mode #add-view .ocr-status,
+body.dark-mode #add-view .time-group,
+body.dark-mode #add-view #workout-form,
+body.dark-mode #add-view #form-fields * {
+    color: #ffffff !important;
+}
+
+body.dark-mode #add-view .close-overlay {
+    background: rgba(255,255,255,0.08);
+    border: 1px solid rgba(255,255,255,0.16);
+}
+
+body.dark-mode #add-view input::placeholder {
+    color: rgba(255,255,255,0.72) !important;
 }
 
 .save-btn, .manage-action-btn, .refresh-btn {
