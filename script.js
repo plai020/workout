@@ -765,7 +765,7 @@ async function handleOCR(file) {
     const originalDataUrl = await readFileAsDataUrl(file);
     const processed = await preprocessImage(img);
     const statsFocusOriginal = cropImageRegion(img, 0.12, 0.5, 1.4);
-    const topSummaryFocus = cropImageRegion(img, 0.18, 0.34, 2.2);
+    const topSummaryFocus = cropImageRegion(img, 0.17, 0.31, 3);
     const worker = await getTesseractWorker();
     const processedResult = await worker.recognize(processed.dataUrl);
     const originalResult = await worker.recognize(originalDataUrl);
@@ -783,7 +783,9 @@ async function handleOCR(file) {
 
     const mergedWords = [
       ...(processedResult?.data?.words || []),
-      ...(originalResult?.data?.words || [])
+      ...(originalResult?.data?.words || []),
+      ...(focusOriginalResult?.data?.words || []),
+      ...(topSummaryResult?.data?.words || [])
     ];
     const filteredWords = mergedWords
       .filter((word) => word?.text?.trim())
@@ -916,73 +918,39 @@ function extractRunningMetrics(text) {
 
 function extractHikingbookMetrics(text) {
   const cleaned = stripOcrNoise(text);
-  const metrics = {
-    distance: extractLabeledValue(cleaned, ['距離'], '\\d+(?:\\.\\d+)?'),
-    avgSpeed: extractLabeledValue(cleaned, ['平均速度'], '\\d+(?:\\.\\d+)?'),
-    ascent: extractLabeledValue(cleaned, ['總爬升'], '\\d+'),
-    descent: extractLabeledValue(cleaned, ['總下降'], '\\d+')
-  };
+  const metrics = {};
 
-  const orderedMatch = cleaned.match(/距離[\s\S]{0,20}?時間[\s\S]{0,30}?(\d+(?:\.\d+)?)[,.\s]+(\d+[.:：]\d{2})[,.\s]+(\d+)[,.\s]+(\d+)[,.\s]+(\d+(?:\.\d+)?)/);
+  const orderedMatch = cleaned.match(/距離[\s\S]{0,24}?時間[\s\S]{0,36}?(\d+(?:\.\d+)?)[,.\s]+(\d+[.:：]\d{2})[,.\s]+(?:總\s*爬升[\s\S]{0,16})?(\d+)[,.\s]+(?:總\s*下\s*降[\s\S]{0,16})?(\d+)[,.\s]+(?:平均\s*速度[\s\S]{0,16})?(\d+(?:\.\d+)?)/);
   if (orderedMatch) {
-    metrics.distance = metrics.distance || orderedMatch[1];
+    metrics.distance = orderedMatch[1];
     const hm = orderedMatch[2].replace('.', ':').split(':');
     metrics.hours = hm[0];
     metrics.minutes = hm[1];
-    metrics.ascent = metrics.ascent || orderedMatch[3];
-    metrics.descent = metrics.descent || orderedMatch[4];
-    metrics.avgSpeed = metrics.avgSpeed || orderedMatch[5];
+    metrics.ascent = orderedMatch[3];
+    metrics.descent = orderedMatch[4];
+    metrics.avgSpeed = orderedMatch[5];
   }
 
-  const timeMatch = cleaned.match(/時間[\s\S]{0,20}?(\d+)\s*時[\s\S]{0,12}?(\d+)\s*分/);
-  if (timeMatch) {
-    metrics.hours = timeMatch[1];
-    metrics.minutes = timeMatch[2];
-  }
-
-  if (!metrics.hours || !metrics.minutes) {
-    const compactTimeMatch = cleaned.match(/(\d{1,2})[:：](\d{2})/);
-    if (compactTimeMatch) {
-      metrics.hours = compactTimeMatch[1];
-      metrics.minutes = compactTimeMatch[2];
+  if (!metrics.distance || !metrics.hours || !metrics.minutes || !metrics.ascent || !metrics.descent || !metrics.avgSpeed) {
+    const sequenceMatch = cleaned.match(/(\d+(?:\.\d+)?)[,.\s]+(\d+[.:：]\d{2})[,.\s]+(\d+)[,.\s]+(\d+)[,.\s]+(\d+(?:\.\d+)?)\s*km\/h/i);
+    if (sequenceMatch) {
+      metrics.distance = metrics.distance || sequenceMatch[1];
+      const hm = sequenceMatch[2].replace('.', ':').split(':');
+      metrics.hours = metrics.hours || hm[0];
+      metrics.minutes = metrics.minutes || hm[1];
+      metrics.ascent = metrics.ascent || sequenceMatch[3];
+      metrics.descent = metrics.descent || sequenceMatch[4];
+      metrics.avgSpeed = metrics.avgSpeed || sequenceMatch[5];
     }
   }
 
-  if (!metrics.hours || !metrics.minutes) {
-    const brokenTimeMatch = cleaned.match(/(\d{1,2})[.:：](\d{2})[.,]?/);
-    if (brokenTimeMatch) {
-      metrics.hours = metrics.hours || brokenTimeMatch[1];
-      metrics.minutes = metrics.minutes || brokenTimeMatch[2];
+  const chartAltitudes = cleaned.match(/(?:^|\s)(\d{2,3})\s+(\d{2,3})(?:\s|$)/);
+  if (chartAltitudes) {
+    const high = Number(chartAltitudes[1]);
+    const low = Number(chartAltitudes[2]);
+    if (Number.isFinite(high) && Number.isFinite(low) && high > low) {
+      metrics.elevGain = high - low;
     }
-  }
-
-  const allIntegers = (cleaned.match(/\d+/g) || []).map(Number).filter(Number.isFinite);
-  const chartCandidates = allIntegers.filter((value) => value >= 20 && value <= 500);
-  const allDecimals = cleaned.match(/\d+(?:\.\d+)?/g) || [];
-  if ((!metrics.distance || !metrics.avgSpeed || !metrics.ascent || !metrics.descent) && allDecimals.length >= 5) {
-    metrics.distance = metrics.distance || allDecimals[1];
-    if (!metrics.hours || !metrics.minutes) {
-      const timeParts = allDecimals[2]?.split(':') || [];
-      if (timeParts.length === 2) {
-        metrics.hours = timeParts[0];
-        metrics.minutes = timeParts[1];
-      }
-    }
-  }
-  const numericTokens = cleaned.match(/\d+(?:\.\d+)?/g) || [];
-  if ((!metrics.ascent || !metrics.descent || !metrics.avgSpeed) && numericTokens.length >= 5) {
-    const pureValues = numericTokens.filter((token) => !token.includes(':'));
-    if (pureValues.length >= 5) {
-      metrics.distance = metrics.distance || pureValues[0];
-      metrics.ascent = metrics.ascent || pureValues[2];
-      metrics.descent = metrics.descent || pureValues[3];
-      metrics.avgSpeed = metrics.avgSpeed || pureValues[4];
-    }
-  }
-  if (chartCandidates.length >= 2) {
-    const lastTwo = chartCandidates.slice(-2);
-    const diff = Math.abs(lastTwo[0] - lastTwo[1]);
-    if (diff > 0) metrics.elevGain = diff;
   }
 
   return metrics;
@@ -1295,41 +1263,22 @@ function smartOCR({ words, fullText }) {
     if (maxAltMatch) markSuccess('f-max-alt', maxAltMatch.value);
   } else if (appType === 'Hikingbook') {
     const metrics = extractHikingbookMetrics(rawText);
-    const distMatch = metrics.distance ? { value: metrics.distance } : findNearbyValue(normalizedWords, '距離', 'num', {
-      directions: ['below', 'right'],
-      maxDistance: 260,
-      preferDecimal: true
-    });
+    const distMatch = metrics.distance ? { value: metrics.distance } : null;
     if (distMatch) markSuccess('f-dist', distMatch.value);
 
-    const hourMatch = metrics.hours ? { value: metrics.hours } : findNearbyValue(normalizedWords, '時', 'int', {
-      directions: ['left'],
-      maxDistance: 160
-    });
+    const hourMatch = metrics.hours ? { value: metrics.hours } : null;
     if (hourMatch) markSuccess('f-hr', hourMatch.value);
 
-    const minuteMatch = metrics.minutes ? { value: metrics.minutes } : findNearbyValue(normalizedWords, '分', 'int', {
-      directions: ['left'],
-      maxDistance: 160
-    });
+    const minuteMatch = metrics.minutes ? { value: metrics.minutes } : null;
     if (minuteMatch) markSuccess('f-min', minuteMatch.value);
 
-    const avgSpeedMatch = metrics.avgSpeed ? { value: metrics.avgSpeed } : findNearbyValue(normalizedWords, '平均速度', 'num', {
-      directions: ['below', 'right'],
-      maxDistance: 260
-    });
+    const avgSpeedMatch = metrics.avgSpeed ? { value: metrics.avgSpeed } : null;
     if (avgSpeedMatch) markSuccess('f-avg-speed', avgSpeedMatch.value);
 
-    const ascentMatch = metrics.ascent ? { value: metrics.ascent } : findNearbyValue(normalizedWords, '總爬升', 'int', {
-      directions: ['below', 'right'],
-      maxDistance: 260
-    });
+    const ascentMatch = metrics.ascent ? { value: metrics.ascent } : null;
     if (ascentMatch) markSuccess('f-ascent', ascentMatch.value);
 
-    const descentMatch = metrics.descent ? { value: metrics.descent } : findNearbyValue(normalizedWords, '總下降', 'int', {
-      directions: ['below', 'right'],
-      maxDistance: 260
-    });
+    const descentMatch = metrics.descent ? { value: metrics.descent } : null;
     if (descentMatch) markSuccess('f-descent', descentMatch.value);
 
     if (metrics.elevGain) markSuccess('f-elev-gain', metrics.elevGain);
