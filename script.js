@@ -693,57 +693,115 @@ function loadImageFromFile(file) {
   });
 }
 
+// --- V4.5 雷達掃描辨識核心 (針對三大 App 特徵優化) ---
 async function handleOCR(file) {
-  const status = document.getElementById('ocr-status');
-  if (!file) return;
-  if (typeof Tesseract === 'undefined') {
-    if (status) status.textContent = 'Tesseract 未載入，請檢查網路。';
-    return;
-  }
+    const status = document.getElementById('ocr-status');
+    status.innerText = "🕵️ 正在掃描圖片特徵...";
+    closeAllModals(); // 辨識時先關閉其他視窗
 
-  if (status) {
-    status.textContent = '圖片優化與解析中…';
-    status.style.color = 'inherit';
-  }
+    try {
+        // 使用畫布預處理圖片（黑白、高對比），提升辨識率
+        const preprocessedImg = await preprocessImage(file);
+        const { data: { text } } = await Tesseract.recognize(preprocessedImg, 'chi_tra+eng');
+        status.innerText = "✅ 辨識完成，正在對號入座...";
+        
+        // --- 第一步：日期優先偵測 ---
+        const dateMatch = text.match(/\d{4}[\/\-\.年]\d{1,2}[\/\-\.月]\d{1,2}/);
+        if (dateMatch) {
+            const dateInput = document.querySelector('#workout-form input[type="date"]');
+            if(dateInput) dateInput.value = dateMatch[0].replace(/年|月/g, '/').replace(/日/g, '');
+        }
 
-  const timeoutMsg = setTimeout(() => {
-    if (status) {
-      status.textContent = '圖片解析中，請稍候或手動輸入。';
-      status.style.color = 'orange';
+        // --- 第二步：判定 App 類型與應用模版 ---
+        let cleanText = text.replace(dateMatch ? dateMatch[0] : '', ''); // 剔除日期雜訊
+
+        if (text.includes('Distance') || text.includes('min/km')) {
+            status.innerText = "🏃 偵測到 Running App 模版";
+            applyRunningTemplate(cleanText);
+        } else if (text.includes('Hikingbook') || text.includes('總爬升')) {
+            status.innerText = "🏔️ 偵測到 Hikingbook 模版";
+            applyHikingTemplate(cleanText);
+        } else if (text.includes('活躍時間') || text.includes('步數目標')) {
+            status.innerText = "👣 偵測到 Pacer App 模版";
+            applyPacerTemplate(cleanText);
+        } else {
+            status.innerText = "⚠️ 無法判定 App 來源，嘗試通配辨識...";
+            applyGenericTemplate(cleanText);
+        }
+
+    } catch (error) {
+        status.innerText = "❌ 辨識失敗，請手動輸入。";
+        console.error(error);
     }
-  }, 20000);
+}
 
-  try {
-    const img = await loadImageFromFile(file);
-    const processed = await preprocessImage(img);
-    const worker = await getTesseractWorker();
-    const { data } = await worker.recognize(processed.dataUrl);
+// --- 🏃 Running App 雷達 (錨點：Distance, Duration, Pace) ---
+function applyRunningTemplate(text) {
+    // 距離：尋找符合 Distance 關鍵字後方的浮點數 (如 4.74)
+    const distanceInput = document.getElementById('f-dist');
+    if (distanceInput) distanceInput.value = findNumberAfterKeyword(text, 'Distance', true) || '';
 
-    clearTimeout(timeoutMsg);
-
-    const rawText = (data?.text || '').trim();
-    console.log('[OCR raw text]', rawText);
-
-    const filteredWords = (data?.words || [])
-      .filter((word) => word?.text?.trim())
-      .filter((word) => word?.bbox?.y0 > processed.height * 0.12);
-
-    const result = smartOCR({
-      words: filteredWords,
-      fullText: rawText
-    });
-
-    if (status) {
-      status.textContent = result.message;
-      status.style.color = result.color || 'inherit';
+    // 時間：尋找 XX:XX:XX 格式
+    const durationMatch = text.match(/\d{1,2}:\d{2}:\d{2}/);
+    if (durationMatch) {
+        const timeArray = durationMatch[0].split(':');
+        document.getElementById('f-hr').value = timeArray[0];
+        document.getElementById('f-min').value = timeArray[1];
     }
-  } catch (err) {
-    clearTimeout(timeoutMsg);
-    if (status) {
-      status.textContent = `辨識失敗：${err.message || err}`;
-      status.style.color = 'red';
+
+    // 配速、速度：錨點搜尋
+    document.getElementById('f-pace').value = text.match(/\d{2}:\d{2}/) ? text.match(/\d{2}:\d{2}/)[0] : '';
+    document.getElementById('f-avg-speed').value = findNumberAfterKeyword(text, 'Average Speed', true) || '';
+    document.getElementById('f-max-speed').value = findNumberAfterKeyword(text, 'Max. Speed', true) || '';
+}
+
+// --- 🏔️ Hikingbook 雷達 (錨點：距離, 總爬升, 最高海拔) ---
+function applyHikingTemplate(text) {
+    // 距離：尋找『距離』字樣下方的純數字
+    document.getElementById('f-dist').value = findNumberAfterKeyword(text, '距離', true) || '';
+
+    // 時間：尋找『時』與『分』前方的整數
+    document.getElementById('f-hr').value = findNumberBeforeKeyword(text, '時') || '';
+    document.getElementById('f-min').value = findNumberBeforeKeyword(text, '分') || '';
+
+    // 爬升、下降：錨點搜尋
+    document.getElementById('f-up-gain').value = findNumberAfterKeyword(text, '總爬升', false) || '';
+    document.getElementById('f-up-loss').value = findNumberAfterKeyword(text, '總下陸', false) || ''; // Hikingbook 辨識可能錯字
+}
+
+// --- 👣 Pacer App 雷達 (錨點：大卡, 公里, 最大的數字) ---
+function applyPacerTemplate(text) {
+    // 大卡：錨點前方的純數字
+    document.getElementById('f-calories').value = findNumberBeforeKeyword(text, '大卡') || '';
+    // 公里：錨點前方的浮點數
+    document.getElementById('f-dist').value = findNumberBeforeKeyword(text, '公里') || '';
+
+    // 時/分：XXh XXm 格式偵測
+    const timeMatch = text.match(/(\d+)h\s*(\d+)m/);
+    if (timeMatch) {
+        document.getElementById('f-hr').value = timeMatch[1];
+        document.getElementById('f-min').value = timeMatch[2];
     }
-  }
+
+    // 總步數：尋找圖片中『最大的連續整數』（通常為步數）
+    const allInts = text.match(/\b\d{3,5}\b/g) || [];
+    if (allInts.length > 0) {
+        document.getElementById('f-steps').value = Math.max(...allInts.map(Number));
+    }
+}
+
+// --- OCR 輔助函數：關鍵字搜尋 ---
+function findNumberAfterKeyword(text, keyword, isFloat = false) {
+    // 建立一個正規表達式：尋找關鍵字後的第n個數字
+    const regex = isFloat ? new RegExp(`${keyword}[^\\d]*(\\d+\\.\\d+)`, 'i') : new RegExp(`${keyword}[^\\d]*(\\d+)`, 'i');
+    const match = text.match(regex);
+    return match ? match[1] : null;
+}
+
+function findNumberBeforeKeyword(text, keyword) {
+    const regex = new RegExp(`(\\d+)\\s*${keyword}`, 'i');
+    const match = text.match(regex);
+    return match ? match[1] : null;
 }
 
 function initOcrUpload() {
