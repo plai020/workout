@@ -717,6 +717,15 @@ function loadImageFromFile(file) {
   });
 }
 
+function readFileAsDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(new Error('原圖讀取失敗'));
+    reader.readAsDataURL(file);
+  });
+}
+
 async function handleOCR(file) {
   const status = document.getElementById('ocr-status');
   if (!file) return;
@@ -739,12 +748,11 @@ async function handleOCR(file) {
 
   try {
     const img = await loadImageFromFile(file);
+    const originalDataUrl = await readFileAsDataUrl(file);
     const processed = await preprocessImage(img);
     const worker = await getTesseractWorker();
-    const [processedResult, originalResult] = await Promise.all([
-      worker.recognize(processed.dataUrl),
-      worker.recognize(img)
-    ]);
+    const processedResult = await worker.recognize(processed.dataUrl);
+    const originalResult = await worker.recognize(originalDataUrl);
 
     clearTimeout(timeoutMsg);
 
