@@ -691,6 +691,20 @@ async function preprocessImage(imgElement) {
   };
 }
 
+function cropImageRegion(imgElement, startYRatio = 0, endYRatio = 1) {
+  const canvas = document.createElement('canvas');
+  const ctx = canvas.getContext('2d');
+  const sourceWidth = imgElement.naturalWidth;
+  const sourceHeight = imgElement.naturalHeight;
+  const startY = Math.max(0, Math.floor(sourceHeight * startYRatio));
+  const endY = Math.min(sourceHeight, Math.ceil(sourceHeight * endYRatio));
+  const cropHeight = Math.max(1, endY - startY);
+  canvas.width = sourceWidth;
+  canvas.height = cropHeight;
+  ctx.drawImage(imgElement, 0, startY, sourceWidth, cropHeight, 0, 0, sourceWidth, cropHeight);
+  return canvas.toDataURL('image/png');
+}
+
 let tesseractWorker = null;
 async function getTesseractWorker() {
   if (tesseractWorker) return tesseractWorker;
@@ -750,15 +764,18 @@ async function handleOCR(file) {
     const img = await loadImageFromFile(file);
     const originalDataUrl = await readFileAsDataUrl(file);
     const processed = await preprocessImage(img);
+    const statsFocusOriginal = cropImageRegion(img, 0.12, 0.5);
     const worker = await getTesseractWorker();
     const processedResult = await worker.recognize(processed.dataUrl);
     const originalResult = await worker.recognize(originalDataUrl);
+    const focusOriginalResult = await worker.recognize(statsFocusOriginal);
 
     clearTimeout(timeoutMsg);
 
     const processedText = (processedResult?.data?.text || '').trim();
     const originalText = (originalResult?.data?.text || '').trim();
-    const rawText = [processedText, originalText].filter(Boolean).join('\n');
+    const focusOriginalText = (focusOriginalResult?.data?.text || '').trim();
+    const rawText = [processedText, originalText, focusOriginalText].filter(Boolean).join('\n');
     console.log('[OCR raw text]', rawText);
 
     const mergedWords = [
@@ -852,11 +869,11 @@ function applyOcrNumbers(text) {
 }
 
 function extractRunningMetrics(text) {
-  return {
+  const metrics = {
     distance: extractFirstMatch(text, [
       /Distance[\s\S]{0,18}?(\d+(?:\.\d+)?)/i,
       /(\d+(?:\.\d+)?)\s*Distance\s*\(?.{0,6}\)?/i,
-      /RUNNING[\s\S]{0,80}?(\d+(?:\.\d+)?)\s+[\d:]{4,8}\s+\d{2,4}/i
+      /RUNNING[\s\S]{0,120}?(\d+(?:\.\d+)?)\s+(?:\d{1,2}:\d{2}:\d{2}|Duration)/i
     ]),
     duration: extractFirstMatch(text, [
       /Duration[\s\S]{0,20}?(\d{1,2}:\d{2}:\d{2})/i,
@@ -870,6 +887,13 @@ function extractRunningMetrics(text) {
     descent: extractLabeledValue(text, ['Elevation Loss'], '\\d+'),
     maxAlt: extractLabeledValue(text, ['Max. Elevation', 'Max Elevation'], '\\d+')
   };
+
+  if (!metrics.distance) {
+    const topTriplet = text.match(/(\d+(?:\.\d+)?)\s+(\d{1,2}:\d{2}:\d{2})\s+\d{2,4}/);
+    if (topTriplet) metrics.distance = topTriplet[1];
+  }
+
+  return metrics;
 }
 
 function extractHikingbookMetrics(text) {
@@ -894,6 +918,14 @@ function extractHikingbookMetrics(text) {
     }
   }
 
+  if (!metrics.hours || !metrics.minutes) {
+    const brokenTimeMatch = text.match(/(\d{1,2})[.:：](\d{2})[.,]?/);
+    if (brokenTimeMatch) {
+      metrics.hours = metrics.hours || brokenTimeMatch[1];
+      metrics.minutes = metrics.minutes || brokenTimeMatch[2];
+    }
+  }
+
   const allIntegers = (text.match(/\d+/g) || []).map(Number).filter(Number.isFinite);
   const chartCandidates = allIntegers.filter((value) => value >= 20 && value <= 500);
   const allDecimals = text.match(/\d+(?:\.\d+)?/g) || [];
@@ -912,15 +944,28 @@ function extractHikingbookMetrics(text) {
     const pureValues = numericTokens.filter((token) => !token.includes(':'));
     if (pureValues.length >= 5) {
       metrics.distance = metrics.distance || pureValues[0];
-      metrics.ascent = metrics.ascent || pureValues[1];
-      metrics.descent = metrics.descent || pureValues[2];
-      metrics.avgSpeed = metrics.avgSpeed || pureValues[3];
+      metrics.ascent = metrics.ascent || pureValues[2];
+      metrics.descent = metrics.descent || pureValues[3];
+      metrics.avgSpeed = metrics.avgSpeed || pureValues[4];
     }
   }
   if (chartCandidates.length >= 2) {
     const lastTwo = chartCandidates.slice(-2);
     const diff = Math.abs(lastTwo[0] - lastTwo[1]);
     if (diff > 0) metrics.elevGain = diff;
+  }
+
+  if ((!metrics.ascent || !metrics.descent || !metrics.avgSpeed) && /距離[\s\S]{0,20}?時間[\s\S]{0,30}?(\d+(?:\.\d+)?)[,.\s]+(\d+[.:：]\d{2})[,.\s]+(\d+)[,.\s]+(\d+)[,.\s]+(\d+(?:\.\d+)?)/.test(text)) {
+    const orderedMatch = text.match(/距離[\s\S]{0,20}?時間[\s\S]{0,30}?(\d+(?:\.\d+)?)[,.\s]+(\d+[.:：]\d{2})[,.\s]+(\d+)[,.\s]+(\d+)[,.\s]+(\d+(?:\.\d+)?)/);
+    if (orderedMatch) {
+      metrics.distance = metrics.distance || orderedMatch[1];
+      const hm = orderedMatch[2].replace('.', ':').split(':');
+      metrics.hours = metrics.hours || hm[0];
+      metrics.minutes = metrics.minutes || hm[1];
+      metrics.ascent = metrics.ascent || orderedMatch[3];
+      metrics.descent = metrics.descent || orderedMatch[4];
+      metrics.avgSpeed = metrics.avgSpeed || orderedMatch[5];
+    }
   }
 
   return metrics;
@@ -942,6 +987,14 @@ function extractPacerMetrics(text) {
     metrics.minutes = timeMatch[2];
   }
 
+  const orderedSummary = text.match(/(\d{1,3})\s+(\d+)h\s*(\d+)m\s+(\d+(?:\.\d+)?)/i);
+  if (orderedSummary) {
+    metrics.calories = metrics.calories || orderedSummary[1];
+    metrics.hours = metrics.hours || orderedSummary[2];
+    metrics.minutes = metrics.minutes || orderedSummary[3];
+    metrics.distance = metrics.distance || orderedSummary[4];
+  }
+
   if (!metrics.date) {
     const pacerDate = text.match(/\d{4}\s*年\s*\d{1,2}\s*月\s*\d{1,2}\s*日/);
     if (pacerDate) {
@@ -959,7 +1012,7 @@ function extractPacerMetrics(text) {
     metrics.steps = stepCandidates
       .map(Number)
       .filter((value) => value >= 300 && value <= 30000)
-      .sort((a, b) => a - b)[0]?.toString() || null;
+      .sort((a, b) => b - a)[0]?.toString() || null;
   }
 
   return metrics;
@@ -1143,7 +1196,7 @@ function smartOCR({ words, fullText }) {
   const wordText = normalizedWords.map((word) => word.text).join(' ');
   const pacerMetricsForDate = extractPacerMetrics(rawText);
   const detectedDate = detectDate(originalText) || detectDate(wordText) || pacerMetricsForDate.date || '';
-  const text = originalText.replace(/\d{4}[\/年]\d{1,2}[\/月]\d{1,2}日?/g, '').trim();
+  const text = originalText.replace(/\d{4}\s*[\/\-年\.]\s*\d{1,2}\s*[\/\-月\.]\s*\d{1,2}\s*日?/g, '').trim();
   console.log('[OCR sanitized text]', text);
 
   const appType = detectOcrAppType(text) || inferOcrAppType(rawText, wordText);
