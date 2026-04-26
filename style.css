@@ -183,6 +183,30 @@ body.dark-mode input::placeholder {
     font-size: 20px;
     margin: 0;
 }
+.month-year-selector {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+.calendar-select {
+    font-size: 18px;
+    font-weight: bold;
+    padding: 4px 8px;
+    border-radius: 8px;
+    border: 1px solid rgba(0,0,0,0.1);
+    background: var(--card-bg);
+    color: var(--text-color);
+    outline: none;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
+    text-align: center;
+}
+.calendar-select-sep {
+    font-size: 18px;
+    font-weight: bold;
+    color: var(--text-color);
+}
 
 .calendar-day,
 #current-month-year,
@@ -215,11 +239,18 @@ body.dark-mode input::placeholder {
 }
 
 body.dark-mode #current-month-year,
+body.dark-mode .month-year-selector,
+body.dark-mode .calendar-select-sep,
 body.dark-mode #calendar-header,
 body.dark-mode .calendar-day,
 body.dark-mode .calendar-day span,
 body.dark-mode .month-nav-btn {
     color: #ffffff !important;
+}
+body.dark-mode .calendar-select {
+    background: #1f1f1f;
+    color: #ffffff;
+    border-color: rgba(255,255,255,0.12);
 }
 
 body.dark-mode .calendar-day {

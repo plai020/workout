@@ -39,6 +39,7 @@ document.addEventListener('DOMContentLoaded', () => {
   initStatDateDefaults();
   initNavigation();
   initCalendarNav();
+  initCalendarSelects();
   renderCalendar();
   initForm();
   initTheme();
@@ -165,6 +166,36 @@ function initCalendarNav() {
   }
 }
 
+function initCalendarSelects() {
+  const yearSelect = document.getElementById('year-select');
+  const monthSelect = document.getElementById('month-select');
+  if (!yearSelect || !monthSelect) return;
+
+  const currentYear = new Date().getFullYear();
+  for (let y = currentYear - 10; y <= currentYear + 10; y++) {
+    const opt = document.createElement('option');
+    opt.value = y;
+    opt.text = y;
+    yearSelect.appendChild(opt);
+  }
+
+  for (let m = 0; m < 12; m++) {
+    const opt = document.createElement('option');
+    opt.value = m;
+    opt.text = m + 1;
+    monthSelect.appendChild(opt);
+  }
+
+  yearSelect.addEventListener('change', () => {
+    viewDate = new Date(parseInt(yearSelect.value), viewDate.getMonth(), 1);
+    renderCalendar();
+  });
+  monthSelect.addEventListener('change', () => {
+    viewDate = new Date(viewDate.getFullYear(), parseInt(monthSelect.value), 1);
+    renderCalendar();
+  });
+}
+
 function dayIntensityScore(dayRecords) {
   let s = 0;
   dayRecords.forEach((r) => {
@@ -183,6 +214,12 @@ function renderCalendar() {
   const y = viewDate.getFullYear();
   const m = viewDate.getMonth();
   const isDark = document.body.classList.contains('dark-mode');
+
+  const yearSelect = document.getElementById('year-select');
+  const monthSelect = document.getElementById('month-select');
+  if (yearSelect) yearSelect.value = y;
+  if (monthSelect) monthSelect.value = m;
+
   const header = document.getElementById('current-month-year');
   if (header) header.innerText = `${y}年 ${m + 1}月`;
 
@@ -765,7 +802,7 @@ async function handleOCR(file) {
     const originalDataUrl = await readFileAsDataUrl(file);
     const processed = await preprocessImage(img);
     const statsFocusOriginal = cropImageRegion(img, 0.12, 0.5, 1.4);
-    const topSummaryFocus = cropImageRegion(img, 0.17, 0.31, 3);
+    const topSummaryFocus = cropImageRegion(img, 0.16, 0.33, 2);
     const hikingChartFocus = cropImageRegion(img, 0.4, 0.72, 2.2);
     const worker = await getTesseractWorker();
     const processedResult = await worker.recognize(processed.dataUrl);
@@ -939,7 +976,7 @@ function extractHikingbookMetrics(text) {
   const metrics = {};
   const compact = cleaned.replace(/\s+/g, '');
 
-  const compactOrdered = compact.match(/距離時間(\d+(?:\.\d+)?)[,.\s]*(\d+)[.:：](\d{2})[,.\s]*總爬升總下降(\d+)[,.\s]*(\d+)[,.\s]*平均速度(?:消耗熱量)?(\d+(?:\.\d+)?)km\/h/i);
+  const compactOrdered = compact.match(/距離時間(\d+(?:\.\d+)?)[,.\s;]*(\d+)[.:：;](\d{2})[,.\s;]*總爬升總下降(\d+)[,.\s;]*(\d+)[,.\s;]*平均速度(?:消耗熱量)?(\d+(?:\.\d+)?)km\/h/i);
   if (compactOrdered) {
     metrics.distance = normalizeOcrNumber(compactOrdered[1]);
     metrics.hours = compactOrdered[2];
@@ -949,7 +986,7 @@ function extractHikingbookMetrics(text) {
     metrics.avgSpeed = normalizeOcrNumber(compactOrdered[6]);
   }
 
-  const orderedMatch = cleaned.match(/距離[\s\S]{0,24}?時間[\s\S]{0,36}?(\d+(?:\.\d+)?)[,.\s]+(\d+[.:：]\d{2})[,.\s]+(?:總\s*爬升[\s\S]{0,16})?(\d+)[,.\s]+(?:總\s*下\s*降[\s\S]{0,16})?(\d+)[,.\s]+(?:平均\s*速度[\s\S]{0,16})?(\d+(?:\.\d+)?)/);
+  const orderedMatch = cleaned.match(/距離[\s\S]{0,24}?時間[\s\S]{0,36}?(\d+(?:\.\d+)?)[,.\s;]+(\d+[.:：;]\d{2})[,.\s;]+(?:總\s*爬升[\s\S]{0,16})?(\d+)[,.\s;]+(?:總\s*下\s*降[\s\S]{0,16})?(\d+)[,.\s;]+(?:平均\s*速度[\s\S]{0,16})?(\d+(?:\.\d+)?)/);
   if (orderedMatch) {
     metrics.distance = orderedMatch[1];
     const hm = orderedMatch[2].replace('.', ':').split(':');
@@ -961,7 +998,7 @@ function extractHikingbookMetrics(text) {
   }
 
   if (!metrics.distance || !metrics.hours || !metrics.minutes || !metrics.ascent || !metrics.descent || !metrics.avgSpeed) {
-    const sequenceMatch = cleaned.match(/(\d+(?:\.\d+)?)[,.\s]+(\d+[.:：]\d{2})[,.\s]+(\d+)[,.\s]+(\d+)[,.\s]+(\d+(?:\.\d+)?)\s*km\/h/i);
+    const sequenceMatch = cleaned.match(/(\d+(?:\.\d+)?)[,.\s;]+(\d+[.:：;]\d{2})[,.\s;]+(\d+)[,.\s;]+(\d+)[,.\s;]+(\d+(?:\.\d+)?)\s*km\/h/i);
     if (sequenceMatch) {
       metrics.distance = metrics.distance || sequenceMatch[1];
       const hm = sequenceMatch[2].replace('.', ':').split(':');

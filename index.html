@@ -21,7 +21,12 @@
         <section id="calendar-view" class="view-section active">
             <div id="calendar-header">
                 <button id="prev-month" class="month-nav-btn">＜</button>
-                <h2 id="current-month-year"></h2>
+                <div class="month-year-selector">
+                    <select id="year-select" class="calendar-select"></select>
+                    <span class="calendar-select-sep">年</span>
+                    <select id="month-select" class="calendar-select"></select>
+                    <span class="calendar-select-sep">月</span>
+                </div>
                 <button id="next-month" class="month-nav-btn">＞</button>
             </div>
             <div id="calendar-grid"></div>
