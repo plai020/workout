@@ -996,7 +996,7 @@ function fixOcrTypos(text) {
 function stripOcrNoise(text) {
   const fixedText = fixOcrTypos(text || '');
   return String(fixedText)
-    .replace(/\d{4}\s*[\/\-年\.]\s*\d{1,2}\s*[\/\-月\.]\s*\d{1,2}\s*日?/g, ' ')
+    .replace(/(?:19|20)\d{2}\s*[\/\-年\.]\s*\d{1,2}\s*[\/\-月\.]\s*\d{1,2}\s*日?/g, ' ')
     .replace(/^(?:\[\|\s*)?\d{1,2}:\d{2}(?:\s*,)?\s*(?:ol|oil|as|il|all)?\s*(?:4G|5G)?/gim, ' ')
     .replace(/\b(?:4G|5G|GPS|Progress|kCal)\b/gi, ' ')
     .replace(/\s+/g, ' ')
@@ -1226,7 +1226,8 @@ function extractPacerMetrics(text) {
     metrics.calories = metrics.calories || orderedSummary[1];
     metrics.hours = metrics.hours || orderedSummary[2];
     metrics.minutes = metrics.minutes || orderedSummary[3];
-    metrics.distance = metrics.distance || orderedSummary[4];
+    // orderedSummary is a structured "Xcal Xh Xm X.Xkm" layout — always trust its distance over labeled search
+    metrics.distance = orderedSummary[4];
   }
 
   if (!metrics.date) {
@@ -1398,7 +1399,13 @@ function setFieldValue(id, value) {
 }
 
 function findLargestStepCandidate(words, excludedValues = []) {
-  const exclusionSet = new Set(excludedValues.filter(Boolean).map((value) => String(value).replace(/\D/g, '')));
+  // Always exclude year-like values (2020–2029) and common non-step numbers
+  const YEAR_EXCLUSIONS = ['2020','2021','2022','2023','2024','2025','2026','2027','2028','2029','10000'];
+  const exclusionSet = new Set(
+    [...YEAR_EXCLUSIONS, ...excludedValues]
+      .filter(Boolean)
+      .map((value) => String(value).replace(/\D/g, ''))
+  );
   const normalizedWords = normalizeOcrWords(words);
   const stepAnchors = normalizedWords.filter((word) => /步數|步數目標/i.test(word.text));
 
@@ -1442,7 +1449,7 @@ function smartOCR({ words, fullText }) {
   const wordText = normalizedWords.map((word) => word.text).join(' ');
   const pacerMetricsForDate = extractPacerMetrics(rawText);
   const detectedDate = detectDate(originalText) || detectDate(wordText) || pacerMetricsForDate.date || '';
-  const text = originalText.replace(/\d{4}\s*[\/\-年\.]\s*\d{1,2}\s*[\/\-月\.]\s*\d{1,2}\s*日?/g, '').trim();
+  const text = originalText.replace(/(?:19|20)\d{2}\s*[\/\-年\.]\s*\d{1,2}\s*[\/\-月\.]\s*\d{1,2}\s*日?/g, '').trim();
   console.log('[OCR sanitized text]', text);
 
   const appType = detectOcrAppType(text) || inferOcrAppType(rawText, wordText);
