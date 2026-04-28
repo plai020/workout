@@ -777,15 +777,28 @@ function cropPacerStepsFocus(imgElement) {
   const ctx = canvas.getContext('2d');
   const sourceWidth = imgElement.naturalWidth;
   const sourceHeight = imgElement.naturalHeight;
-  const startX = Math.floor(sourceWidth * 0.1);
-  const width = Math.ceil(sourceWidth * 0.8);
-  const startY = Math.floor(sourceHeight * 0.35);
-  const endY = Math.ceil(sourceHeight * 0.55);
+  const startX = Math.floor(sourceWidth * 0.15);
+  const width = Math.ceil(sourceWidth * 0.7);
+  const startY = Math.floor(sourceHeight * 0.38);
+  const endY = Math.ceil(sourceHeight * 0.52);
   const cropHeight = Math.max(1, endY - startY);
-  const scale = 2;
+  const scale = 2.5;
   canvas.width = Math.round(width * scale);
   canvas.height = Math.round(cropHeight * scale);
   ctx.drawImage(imgElement, startX, startY, width, cropHeight, 0, 0, canvas.width, canvas.height);
+  
+  const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  const data = imageData.data;
+  for (let i = 0; i < data.length; i += 4) {
+    const gray = 0.299 * data[i] + 0.587 * data[i+1] + 0.114 * data[i+2];
+    if (gray < 210) {
+      data[i] = data[i+1] = data[i+2] = 0;
+    } else {
+      data[i] = data[i+1] = data[i+2] = 255;
+    }
+  }
+  ctx.putImageData(imageData, 0, 0);
+  
   return canvas.toDataURL('image/png');
 }
 
@@ -1109,6 +1122,27 @@ function extractHikingbookMetrics(text) {
     metrics.ascent = fallbackMatch[4];
     metrics.descent = fallbackMatch[5];
     metrics.avgSpeed = fallbackMatch[6];
+  } else if (!metrics.distance) {
+    const distTimeMatch = cleaned.match(/(\d+(?:\.\d+)?)\s*km\s*(\d+)\s*時\s*(\d+)\s*分/i) || cleaned.match(/(\d+(?:\.\d+)?)[,.\s;]+(\d+)[-.:：;](\d{2})/i);
+    if (distTimeMatch) {
+      metrics.distance = metrics.distance || distTimeMatch[1];
+      metrics.hours = metrics.hours || distTimeMatch[2];
+      metrics.minutes = metrics.minutes || distTimeMatch[3];
+    }
+    const ascDescMatch = cleaned.match(/(\d{3,4})[,.\s;]+(\d{3,4})/g);
+    if (ascDescMatch) {
+      for (const m of ascDescMatch) {
+        const nums = m.match(/\d{3,4}/g);
+        if (nums && nums.length === 2 && nums[0] !== '2025' && nums[0] !== '2026') {
+          metrics.ascent = nums[0];
+          metrics.descent = nums[1];
+        }
+      }
+    }
+    const speedMatch = cleaned.match(/(\d+(?:\.\d+)?)\s*km\/h/i);
+    if (speedMatch) {
+      metrics.avgSpeed = metrics.avgSpeed || speedMatch[1];
+    }
   }
 
   metrics.distance = normalizeOcrNumber(metrics.distance);
