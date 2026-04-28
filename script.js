@@ -1120,22 +1120,61 @@ function extractHikingbookMetrics(text) {
     }
   }
 
-  // Strategy 3: labeled extraction from full cleaned text
+  // Strategy 3: km + 時 + 分 structured pattern (most reliable for Hikingbook)
+  // This captures: "13.1 km 7 時 38 分 1045. 1039. 1.73 1525..."
+  if (!metrics.distance) {
+    const kmTimeFull = cleaned.match(/(\d+(?:\.\d+)?)\s*km\s*(\d+)\s*時\s*(\d+)\s*分\s*(\d{3,4})[,.\s;]+(\d{3,4})[,.\s;]+(\d+(?:\.\d+)?)/i);
+    if (kmTimeFull) {
+      metrics.distance = kmTimeFull[1];
+      metrics.hours = kmTimeFull[2];
+      metrics.minutes = kmTimeFull[3];
+      metrics.ascent = kmTimeFull[4];
+      metrics.descent = kmTimeFull[5];
+      metrics.avgSpeed = fixHikingSpeedOcr(kmTimeFull[6]);
+    } else {
+      // Partial: just distance + time
+      const kmTimePart = cleaned.match(/(\d+(?:\.\d+)?)\s*km\s*(\d+)\s*時\s*(\d+)\s*分/i);
+      if (kmTimePart) {
+        metrics.distance = kmTimePart[1];
+        metrics.hours = kmTimePart[2];
+        metrics.minutes = kmTimePart[3];
+      }
+    }
+  }
+
+  // Strategy 4: sequence "dist, h:mm, ascent, descent, speed km/h"
+  if (!metrics.distance || !metrics.hours || !metrics.minutes || !metrics.ascent || !metrics.descent || !metrics.avgSpeed) {
+    const sequenceMatch = cleaned.match(/(\d+(?:\.\d+)?)[,.\s;]+(\d+[.:：;]\d{2})[,.\s;]+(\d{3,4})[,.\s;]+(\d{3,4})[,.\s;]+(\d+(?:\.\d+)?)\s*km\/h/i);
+    if (sequenceMatch) {
+      metrics.distance = metrics.distance || sequenceMatch[1];
+      const hm = sequenceMatch[2].replace('.', ':').split(':');
+      metrics.hours = metrics.hours || hm[0];
+      metrics.minutes = metrics.minutes || hm[1];
+      metrics.ascent = metrics.ascent || sequenceMatch[3];
+      metrics.descent = metrics.descent || sequenceMatch[4];
+      metrics.avgSpeed = metrics.avgSpeed || fixHikingSpeedOcr(sequenceMatch[5]);
+    }
+  }
+
+  // Strategy 5: labeled extraction from full cleaned text (individual fields)
   if (!metrics.distance) {
     const dMatch = cleaned.match(/距離[\s\S]{0,10}?(\d+(?:\.\d+)?)\s*km/i) ||
-                   cleaned.match(/(\d+(?:\.\d+)?)\s*km[\s\S]{0,10}?時間/i);
+                   cleaned.match(/(\d+(?:\.\d+)?)\s*km[\s\S]{0,20}?時/i);
     if (dMatch) metrics.distance = dMatch[1];
   }
   if (!metrics.hours || !metrics.minutes) {
-    const tMatch = cleaned.match(/時間[\s\S]{0,10}?(\d+)\s*時\s*(\d+)\s*分/i) ||
-                   cleaned.match(/(\d+)[.:\-](\d{2})\s*[\s\S]{0,6}?(?:總|距|爬)/i);
-    if (tMatch) { metrics.hours = tMatch[1]; metrics.minutes = tMatch[2]; }
+    const tMatch = cleaned.match(/(\d+)\s*時\s*(\d+)\s*分/);
+    if (tMatch) { metrics.hours = metrics.hours || tMatch[1]; metrics.minutes = metrics.minutes || tMatch[2]; }
     if (!metrics.hours) {
-      const hmAlt = cleaned.match(/7[.:](3[0-9]|[0-9]{2})|[0-9]+[.:][0-9]{2}/);
-      if (hmAlt) {
-        const hm = hmAlt[0].replace('.', ':').split(':');
-        metrics.hours = metrics.hours || hm[0];
-        metrics.minutes = metrics.minutes || hm[1];
+      // Look for H:MM pattern — only match realistic time (hours 0-23, minutes 0-59)
+      const hmCandidates = [...cleaned.matchAll(/(\d{1,2})[.:]((\d{2}))[;,\s]/g)];
+      for (const hmc of hmCandidates) {
+        const h = Number(hmc[1]), m = Number(hmc[3]);
+        if (h >= 0 && h <= 23 && m >= 0 && m <= 59) {
+          metrics.hours = metrics.hours || String(h);
+          metrics.minutes = metrics.minutes || String(m);
+          break;
+        }
       }
     }
   }
@@ -1153,31 +1192,8 @@ function extractHikingbookMetrics(text) {
     if (sMatch) metrics.avgSpeed = fixHikingSpeedOcr(sMatch[1]);
   }
 
-  // Strategy 4: sequence without km/h label
-  if (!metrics.distance || !metrics.hours || !metrics.minutes || !metrics.ascent || !metrics.descent || !metrics.avgSpeed) {
-    const sequenceMatch = cleaned.match(/(\d+(?:\.\d+)?)[,.\s;]+(\d+[.:：;]\d{2})[,.\s;]+(\d+)[,.\s;]+(\d+)[,.\s;]+(\d+(?:\.\d+)?)\s*km\/h/i);
-    if (sequenceMatch) {
-      metrics.distance = metrics.distance || sequenceMatch[1];
-      const hm = sequenceMatch[2].replace('.', ':').split(':');
-      metrics.hours = metrics.hours || hm[0];
-      metrics.minutes = metrics.minutes || hm[1];
-      metrics.ascent = metrics.ascent || sequenceMatch[3];
-      metrics.descent = metrics.descent || sequenceMatch[4];
-      metrics.avgSpeed = metrics.avgSpeed || fixHikingSpeedOcr(sequenceMatch[5]);
-    }
-  }
-
-  // Strategy 5: km + 時 + 分 full text fallback
-  const fallbackMatch = cleaned.match(/(\d+(?:\.\d+)?)\s*km\s*(\d+)\s*時\s*(\d+)\s*分\s*(\d+)[,.\s;]+(\d+)[,.\s;]+(\d+(?:\.\d+)?)/i);
-  if (fallbackMatch && !metrics.distance) {
-    metrics.distance = fallbackMatch[1];
-    metrics.hours = fallbackMatch[2];
-    metrics.minutes = fallbackMatch[3];
-    metrics.ascent = fallbackMatch[4];
-    metrics.descent = fallbackMatch[5];
-    metrics.avgSpeed = fixHikingSpeedOcr(fallbackMatch[6]);
-  } else if (!metrics.ascent || !metrics.descent) {
-    // Pick a 3-4 digit pair that looks like ascent/descent (not a year)
+  // Strategy 6: ascent/descent pair fallback
+  if (!metrics.ascent || !metrics.descent) {
     const ascDescMatch = cleaned.match(/(\d{3,4})[,.\s;]+(\d{3,4})/g);
     if (ascDescMatch) {
       for (const m of ascDescMatch) {
