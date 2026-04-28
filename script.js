@@ -1080,38 +1080,14 @@ function extractHikingbookMetrics(text) {
     }
   }
 
-  // Attempt to find the two elevation numbers for difference
-  // Normally they are 2-4 digit numbers separated by spaces or newlines at the end of the text
-  const allNumbers = (text.match(/\b\d{2,4}\b/g) || []).map(Number).filter(Number.isFinite);
-  // Find pairs of numbers where one is significantly larger than the other, and difference is roughly ascent
-  // Or simply look for the max and min of the isolated chart numbers if they were captured
-  if (allNumbers.length >= 2) {
-    // A heuristic: the highest elevation is usually > 100, the lowest is usually < highest.
-    // Let's see if any pair matches closely with `ascent`.
-    // Actually, Hikingbook chart numbers are often at the very end of the OCR text.
-    const lastFew = allNumbers.slice(-4);
-    if (lastFew.length >= 2) {
-      let maxNum = Math.max(...lastFew);
-      let minNum = Math.min(...lastFew);
-      if (maxNum > minNum && maxNum - minNum > 10) {
-        metrics.elevGain = maxNum - minNum;
-      }
-    }
-  }
-
-  // Override elevGain if we can find exact chart numbers like 371 and 41 directly from text
-  // Since we use cropAndEnhanceHikingChart, they might be cleanly recognized.
-  const chartMatches = text.match(/\b(\d{2,4})\b[\s\S]{0,30}\b(\d{2,4})\b/g);
-  if (chartMatches) {
-    chartMatches.forEach(match => {
-      const nums = match.match(/\d{2,4}/g).map(Number);
-      if (nums.length === 2 && nums[0] !== nums[1]) {
-        const diff = Math.abs(nums[0] - nums[1]);
-        if (diff > 10 && (!metrics.elevGain || diff > metrics.elevGain)) {
-          metrics.elevGain = diff;
-        }
-      }
-    });
+  const fallbackMatch = cleaned.match(/(\d+(?:\.\d+)?)\s*km\s*(\d+)\s*時\s*(\d+)\s*分\s*(\d+)[,.\s;]+(\d+)[,.\s;]+(\d+(?:\.\d+)?)/i);
+  if (fallbackMatch && !metrics.distance) {
+    metrics.distance = fallbackMatch[1];
+    metrics.hours = fallbackMatch[2];
+    metrics.minutes = fallbackMatch[3];
+    metrics.ascent = fallbackMatch[4];
+    metrics.descent = fallbackMatch[5];
+    metrics.avgSpeed = fallbackMatch[6];
   }
 
   metrics.distance = normalizeOcrNumber(metrics.distance);
@@ -1156,12 +1132,12 @@ function extractPacerMetrics(text) {
     }
   }
 
-  const stepCandidates = (cleaned.match(/\d{3,5}/g) || [])
+  const stepCandidates = (cleaned.match(/\d{3,6}/g) || [])
     .filter((value) => value !== '10000' && value !== '2026');
   if (!metrics.steps && stepCandidates.length > 0) {
     metrics.steps = stepCandidates
       .map(Number)
-      .filter((value) => value >= 300 && value <= 30000)
+      .filter((value) => value >= 300 && value <= 200000)
       .sort((a, b) => b - a)[0]?.toString() || null;
   }
 
@@ -1307,7 +1283,7 @@ function findLargestStepCandidate(words, excludedValues = []) {
   const stepAnchors = normalizedWords.filter((word) => /步數|步數目標/i.test(word.text));
 
   const candidates = normalizedWords
-    .filter((word) => /^\d{4,5}$/.test(word.text.replace(/[,\s]/g, '')))
+    .filter((word) => /^\d{4,6}$/.test(word.text.replace(/[,\s]/g, '')))
     .map((word) => {
       const numericText = word.text.replace(/[,\s]/g, '');
       const nearestAnchorDistance = stepAnchors.length
