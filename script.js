@@ -1075,11 +1075,29 @@ function extractRunningMetrics(text) {
   return metrics;
 }
 
+function fixHikingSpeedOcr(rawSpeed) {
+  // OCR often drops the decimal point: "1.73" → "173". Detect unrealistic speed and reinsert it.
+  if (!rawSpeed) return rawSpeed;
+  const n = Number(rawSpeed);
+  if (!Number.isFinite(n)) return rawSpeed;
+  // Hiking average speed is normally 0.5–8 km/h. If >10, assume decimal was lost.
+  if (n >= 10 && n < 1000) {
+    const fixed = (n / 100).toFixed(2).replace(/\.?0+$/, '');
+    const fixedN = Number(fixed);
+    if (fixedN >= 0.5 && fixedN <= 8) return fixed;
+    const fixed2 = (n / 10).toFixed(2).replace(/\.?0+$/, '');
+    const fixed2N = Number(fixed2);
+    if (fixed2N >= 0.5 && fixed2N <= 8) return fixed2;
+  }
+  return rawSpeed;
+}
+
 function extractHikingbookMetrics(text) {
   const cleaned = stripOcrNoise(text);
   const metrics = {};
   const compact = cleaned.replace(/\s+/g, '');
 
+  // Strategy 1: compact full sequence with labels
   const compactOrdered = compact.match(/距離時間(\d+(?:\.\d+)?)[,.\s;]*(\d+)[.:：;](\d{2})[,.\s;]*總爬升總下降(\d+)[,.\s;]*(\d+)[,.\s;]*平均速度(?:消耗熱量)?(\d+(?:\.\d+)?)km\/h/i);
   if (compactOrdered) {
     metrics.distance = normalizeOcrNumber(compactOrdered[1]);
@@ -1087,20 +1105,55 @@ function extractHikingbookMetrics(text) {
     metrics.minutes = compactOrdered[3];
     metrics.ascent = compactOrdered[4];
     metrics.descent = compactOrdered[5];
-    metrics.avgSpeed = normalizeOcrNumber(compactOrdered[6]);
+    metrics.avgSpeed = normalizeOcrNumber(fixHikingSpeedOcr(compactOrdered[6]));
   }
 
-  const orderedMatch = cleaned.match(/距離[\s\S]{0,24}?時間[\s\S]{0,36}?(\d+(?:\.\d+)?)[,.\s;]+(\d+[.:：;]\d{2})[,.\s;]+(?:總\s*爬升[\s\S]{0,16})?(\d+)[,.\s;]+(?:總\s*下\s*降[\s\S]{0,16})?(\d+)[,.\s;]+(?:平均\s*速度[\s\S]{0,16})?(\d+(?:\.\d+)?)/);
-  if (orderedMatch) {
-    metrics.distance = orderedMatch[1];
-    const hm = orderedMatch[2].replace('.', ':').split(':');
-    metrics.hours = hm[0];
-    metrics.minutes = hm[1];
-    metrics.ascent = orderedMatch[3];
-    metrics.descent = orderedMatch[4];
-    metrics.avgSpeed = orderedMatch[5];
+  // Strategy 2: compact without climb labels (OCR may miss them)
+  if (!metrics.distance || !metrics.avgSpeed) {
+    const compactNoLabel = compact.match(/距離時間(\d+(?:\.\d+)?)[,.;]*(\d+)[.:：;](\d{2})[,.;]*(\d{3,4})[,.;]*(\d{3,4})[,.;]*(\d+(?:\.\d+)?)km\/h/i);
+    if (compactNoLabel) {
+      metrics.distance = metrics.distance || normalizeOcrNumber(compactNoLabel[1]);
+      if (!metrics.hours) { metrics.hours = compactNoLabel[2]; metrics.minutes = compactNoLabel[3]; }
+      metrics.ascent = metrics.ascent || compactNoLabel[4];
+      metrics.descent = metrics.descent || compactNoLabel[5];
+      metrics.avgSpeed = metrics.avgSpeed || normalizeOcrNumber(fixHikingSpeedOcr(compactNoLabel[6]));
+    }
   }
 
+  // Strategy 3: labeled extraction from full cleaned text
+  if (!metrics.distance) {
+    const dMatch = cleaned.match(/距離[\s\S]{0,10}?(\d+(?:\.\d+)?)\s*km/i) ||
+                   cleaned.match(/(\d+(?:\.\d+)?)\s*km[\s\S]{0,10}?時間/i);
+    if (dMatch) metrics.distance = dMatch[1];
+  }
+  if (!metrics.hours || !metrics.minutes) {
+    const tMatch = cleaned.match(/時間[\s\S]{0,10}?(\d+)\s*時\s*(\d+)\s*分/i) ||
+                   cleaned.match(/(\d+)[.:\-](\d{2})\s*[\s\S]{0,6}?(?:總|距|爬)/i);
+    if (tMatch) { metrics.hours = tMatch[1]; metrics.minutes = tMatch[2]; }
+    if (!metrics.hours) {
+      const hmAlt = cleaned.match(/7[.:](3[0-9]|[0-9]{2})|[0-9]+[.:][0-9]{2}/);
+      if (hmAlt) {
+        const hm = hmAlt[0].replace('.', ':').split(':');
+        metrics.hours = metrics.hours || hm[0];
+        metrics.minutes = metrics.minutes || hm[1];
+      }
+    }
+  }
+  if (!metrics.ascent) {
+    const aMatch = cleaned.match(/總\s*爬\s*升[\s\S]{0,10}?(\d{3,4})/);
+    if (aMatch) metrics.ascent = aMatch[1];
+  }
+  if (!metrics.descent) {
+    const dMatch2 = cleaned.match(/總\s*下\s*降[\s\S]{0,10}?(\d{3,4})/);
+    if (dMatch2) metrics.descent = dMatch2[1];
+  }
+  if (!metrics.avgSpeed) {
+    const sMatch = cleaned.match(/平均\s*速度[\s\S]{0,10}?(\d+(?:\.\d+)?)/) ||
+                   cleaned.match(/(\d+(?:\.\d+)?)\s*km\/h/i);
+    if (sMatch) metrics.avgSpeed = fixHikingSpeedOcr(sMatch[1]);
+  }
+
+  // Strategy 4: sequence without km/h label
   if (!metrics.distance || !metrics.hours || !metrics.minutes || !metrics.ascent || !metrics.descent || !metrics.avgSpeed) {
     const sequenceMatch = cleaned.match(/(\d+(?:\.\d+)?)[,.\s;]+(\d+[.:：;]\d{2})[,.\s;]+(\d+)[,.\s;]+(\d+)[,.\s;]+(\d+(?:\.\d+)?)\s*km\/h/i);
     if (sequenceMatch) {
@@ -1110,10 +1163,11 @@ function extractHikingbookMetrics(text) {
       metrics.minutes = metrics.minutes || hm[1];
       metrics.ascent = metrics.ascent || sequenceMatch[3];
       metrics.descent = metrics.descent || sequenceMatch[4];
-      metrics.avgSpeed = metrics.avgSpeed || sequenceMatch[5];
+      metrics.avgSpeed = metrics.avgSpeed || fixHikingSpeedOcr(sequenceMatch[5]);
     }
   }
 
+  // Strategy 5: km + 時 + 分 full text fallback
   const fallbackMatch = cleaned.match(/(\d+(?:\.\d+)?)\s*km\s*(\d+)\s*時\s*(\d+)\s*分\s*(\d+)[,.\s;]+(\d+)[,.\s;]+(\d+(?:\.\d+)?)/i);
   if (fallbackMatch && !metrics.distance) {
     metrics.distance = fallbackMatch[1];
@@ -1121,41 +1175,40 @@ function extractHikingbookMetrics(text) {
     metrics.minutes = fallbackMatch[3];
     metrics.ascent = fallbackMatch[4];
     metrics.descent = fallbackMatch[5];
-    metrics.avgSpeed = fallbackMatch[6];
-  } else if (!metrics.distance) {
-    const distTimeMatch = cleaned.match(/(\d+(?:\.\d+)?)\s*km\s*(\d+)\s*時\s*(\d+)\s*分/i) || cleaned.match(/(\d+(?:\.\d+)?)[,.\s;]+(\d+)[-.:：;](\d{2})/i);
-    if (distTimeMatch) {
-      metrics.distance = metrics.distance || distTimeMatch[1];
-      metrics.hours = metrics.hours || distTimeMatch[2];
-      metrics.minutes = metrics.minutes || distTimeMatch[3];
-    }
+    metrics.avgSpeed = fixHikingSpeedOcr(fallbackMatch[6]);
+  } else if (!metrics.ascent || !metrics.descent) {
+    // Pick a 3-4 digit pair that looks like ascent/descent (not a year)
     const ascDescMatch = cleaned.match(/(\d{3,4})[,.\s;]+(\d{3,4})/g);
     if (ascDescMatch) {
       for (const m of ascDescMatch) {
         const nums = m.match(/\d{3,4}/g);
-        if (nums && nums.length === 2 && nums[0] !== '2025' && nums[0] !== '2026') {
-          metrics.ascent = nums[0];
-          metrics.descent = nums[1];
+        if (nums && nums.length === 2 && !['2024','2025','2026','2027'].includes(nums[0])) {
+          if (!metrics.ascent) metrics.ascent = nums[0];
+          if (!metrics.descent) metrics.descent = nums[1];
         }
       }
     }
-    const speedMatch = cleaned.match(/(\d+(?:\.\d+)?)\s*km\/h/i);
-    if (speedMatch) {
-      metrics.avgSpeed = metrics.avgSpeed || speedMatch[1];
-    }
   }
 
+  // Post-process: fix speed if still unrealistic after all strategies
   metrics.distance = normalizeOcrNumber(metrics.distance);
-  metrics.avgSpeed = normalizeOcrNumber(metrics.avgSpeed);
+  if (metrics.avgSpeed) metrics.avgSpeed = normalizeOcrNumber(fixHikingSpeedOcr(metrics.avgSpeed));
 
   return metrics;
 }
 
 function extractPacerMetrics(text) {
   const cleaned = stripOcrNoise(text);
+
+  // Extract calories first with broader match (3-4 digit number near 大卡)
+  const calRaw = extractLabeledValue(cleaned, ['大卡'], '\\d{3,4}');
+  // Also try to find calories as first number before 大卡 label (Pacer layout: "1376 大卡 活躍時間 ...")
+  const calHeaderMatch = cleaned.match(/(\d{3,4})\s*(?:大卡|kcal)/i);
+  const calories = calRaw || calHeaderMatch?.[1] || null;
+
   const metrics = {
     distance: extractLabeledValue(cleaned, ['公里'], '\\d+(?:\\.\\d+)?'),
-    calories: extractLabeledValue(cleaned, ['大卡'], '\\d+'),
+    calories,
     steps: extractFirstMatch(text, [
       /(\d{3,5})[\s\S]{0,20}?步數目標/,
       /步數目標[:：]?\s*\d+[\s\S]{0,20}?(\d{3,5})/
@@ -1168,12 +1221,12 @@ function extractPacerMetrics(text) {
     metrics.minutes = timeMatch[2];
   }
 
-  const orderedSummary = cleaned.match(/(\d{1,3})\s+(\d+)h\s*(\d+)m\s+(\d+(?:\.\d+)?)/i);
+  const orderedSummary = cleaned.match(/(\d{1,4})\s+(\d+)h\s*(\d+)m\s+(\d+(?:\.\d+)?)/i);
   if (orderedSummary) {
     metrics.calories = metrics.calories || orderedSummary[1];
     metrics.hours = metrics.hours || orderedSummary[2];
     metrics.minutes = metrics.minutes || orderedSummary[3];
-    metrics.distance = orderedSummary[4];
+    metrics.distance = metrics.distance || orderedSummary[4];
   }
 
   if (!metrics.date) {
@@ -1187,13 +1240,25 @@ function extractPacerMetrics(text) {
     }
   }
 
-  const stepCandidates = (cleaned.match(/\d{3,6}/g) || [])
-    .filter((value) => value !== '10000' && value !== '2026');
-  if (!metrics.steps && stepCandidates.length > 0) {
-    metrics.steps = stepCandidates
-      .map(Number)
-      .filter((value) => value >= 300 && value <= 200000)
-      .sort((a, b) => b - a)[0]?.toString() || null;
+  // Build exclusion set: exclude years, known non-step values, and the calorie value itself
+  const calNum = metrics.calories ? String(metrics.calories).replace(/\D/g, '') : null;
+  const exclusions = new Set(['10000', '2024', '2025', '2026', '2027']);
+  if (calNum) exclusions.add(calNum);
+  // Also exclude calorie value ± 1 to handle OCR digit-drop (e.g. 1376 → 376 or 137)
+  if (calNum && calNum.length === 4) {
+    exclusions.add(calNum.slice(1));   // drop first digit
+    exclusions.add(calNum.slice(0, 3)); // drop last digit
+  }
+
+  if (!metrics.steps) {
+    const stepCandidates = (cleaned.match(/\d{4,6}/g) || [])
+      .filter((value) => !exclusions.has(value));
+    if (stepCandidates.length > 0) {
+      metrics.steps = stepCandidates
+        .map(Number)
+        .filter((value) => value >= 1000 && value <= 200000)
+        .sort((a, b) => b - a)[0]?.toString() || null;
+    }
   }
 
   return metrics;
@@ -1458,7 +1523,7 @@ function smartOCR({ words, fullText }) {
     if (maxAltMatch) markSuccess('f-max-alt', maxAltMatch.value);
   } else if (appType === 'Hikingbook') {
     const metrics = extractHikingbookMetrics(rawText);
-    const distMatch = metrics.distance ? { value: metrics.distance } : null;
+    const distMatch = metrics.distance ? { value: metrics.distance } : findNearbyValue(normalizedWords, ['距離'], 'num', { directions: ['below', 'right'], maxDistance: 280, preferDecimal: true });
     if (distMatch) markSuccess('f-dist', distMatch.value);
 
     const hourMatch = metrics.hours ? { value: metrics.hours } : null;
@@ -1467,14 +1532,29 @@ function smartOCR({ words, fullText }) {
     const minuteMatch = metrics.minutes ? { value: metrics.minutes } : null;
     if (minuteMatch) markSuccess('f-min', minuteMatch.value);
 
-    const avgSpeedMatch = metrics.avgSpeed ? { value: metrics.avgSpeed } : null;
-    if (avgSpeedMatch) markSuccess('f-avg-speed', avgSpeedMatch.value);
+    // avgSpeed: use extracted value; if missing or unrealistic, try word-level
+    let resolvedSpeed = metrics.avgSpeed;
+    if (!resolvedSpeed) {
+      const speedWordMatch = findNearbyValue(normalizedWords, ['平均速度', '速度'], 'num', { directions: ['below', 'right'], maxDistance: 300 });
+      if (speedWordMatch) resolvedSpeed = fixHikingSpeedOcr(speedWordMatch.value);
+    }
+    if (resolvedSpeed) markSuccess('f-avg-speed', resolvedSpeed);
 
-    const ascentMatch = metrics.ascent ? { value: metrics.ascent } : null;
-    if (ascentMatch) markSuccess('f-ascent', ascentMatch.value);
+    // ascent: use extracted; fallback to word-level near 總爬升
+    let resolvedAscent = metrics.ascent;
+    if (!resolvedAscent) {
+      const ascentWordMatch = findNearbyValue(normalizedWords, ['總爬升', '爬升'], 'int', { directions: ['below', 'right'], maxDistance: 300 });
+      if (ascentWordMatch) resolvedAscent = ascentWordMatch.value;
+    }
+    if (resolvedAscent) markSuccess('f-ascent', resolvedAscent);
 
-    const descentMatch = metrics.descent ? { value: metrics.descent } : null;
-    if (descentMatch) markSuccess('f-descent', descentMatch.value);
+    // descent: use extracted; fallback to word-level near 總下降
+    let resolvedDescent = metrics.descent;
+    if (!resolvedDescent) {
+      const descentWordMatch = findNearbyValue(normalizedWords, ['總下降', '下降'], 'int', { directions: ['below', 'right'], maxDistance: 300 });
+      if (descentWordMatch) resolvedDescent = descentWordMatch.value;
+    }
+    if (resolvedDescent) markSuccess('f-descent', resolvedDescent);
 
     if (metrics.elevGain) markSuccess('f-elev-gain', metrics.elevGain);
   } else if (appType === 'Pacer') {
@@ -1506,7 +1586,7 @@ function smartOCR({ words, fullText }) {
       console.log('[OCR pacer calories]', calorieMatch.value);
     }
 
-    const steps = metrics.steps || findLargestStepCandidate(normalizedWords, [calorieMatch?.value, '10000']);
+    const steps = metrics.steps || findLargestStepCandidate(normalizedWords, [calorieMatch?.value, metrics.calories, '10000']);
     if (steps) markSuccess('f-steps', steps);
   }
 
