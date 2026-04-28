@@ -772,6 +772,23 @@ function cropAndEnhanceHikingChart(imgElement) {
   return canvas.toDataURL('image/png');
 }
 
+function cropPacerStepsFocus(imgElement) {
+  const canvas = document.createElement('canvas');
+  const ctx = canvas.getContext('2d');
+  const sourceWidth = imgElement.naturalWidth;
+  const sourceHeight = imgElement.naturalHeight;
+  const startX = Math.floor(sourceWidth * 0.1);
+  const width = Math.ceil(sourceWidth * 0.8);
+  const startY = Math.floor(sourceHeight * 0.35);
+  const endY = Math.ceil(sourceHeight * 0.55);
+  const cropHeight = Math.max(1, endY - startY);
+  const scale = 2;
+  canvas.width = Math.round(width * scale);
+  canvas.height = Math.round(cropHeight * scale);
+  ctx.drawImage(imgElement, startX, startY, width, cropHeight, 0, 0, canvas.width, canvas.height);
+  return canvas.toDataURL('image/png');
+}
+
 let tesseractWorker = null;
 async function getTesseractWorker() {
   if (tesseractWorker) return tesseractWorker;
@@ -834,12 +851,14 @@ async function handleOCR(file) {
     const statsFocusOriginal = cropImageRegion(img, 0.12, 0.5, 1.4);
     const topSummaryFocus = cropImageRegion(img, 0.16, 0.33, 2);
     const hikingChartFocus = cropAndEnhanceHikingChart(img);
+    const pacerStepsFocus = cropPacerStepsFocus(img);
     const worker = await getTesseractWorker();
     const processedResult = await worker.recognize(processed.dataUrl);
     const originalResult = await worker.recognize(originalDataUrl);
     const focusOriginalResult = await worker.recognize(statsFocusOriginal);
     const topSummaryResult = await worker.recognize(topSummaryFocus);
     const hikingChartResult = await worker.recognize(hikingChartFocus);
+    const pacerStepsResult = await worker.recognize(pacerStepsFocus);
 
     clearTimeout(timeoutMsg);
 
@@ -848,7 +867,8 @@ async function handleOCR(file) {
     const focusOriginalText = (focusOriginalResult?.data?.text || '').trim();
     const topSummaryText = (topSummaryResult?.data?.text || '').trim();
     const hikingChartText = (hikingChartResult?.data?.text || '').trim();
-    const rawText = [processedText, originalText, focusOriginalText, topSummaryText, hikingChartText].filter(Boolean).join('\n');
+    const pacerStepsText = (pacerStepsResult?.data?.text || '').trim();
+    const rawText = [processedText, originalText, focusOriginalText, topSummaryText, hikingChartText, pacerStepsText].filter(Boolean).join('\n');
     console.log('[OCR raw text]', rawText);
 
     const mergedWords = [
@@ -856,7 +876,8 @@ async function handleOCR(file) {
       ...(originalResult?.data?.words || []),
       ...(focusOriginalResult?.data?.words || []),
       ...(topSummaryResult?.data?.words || []),
-      ...(hikingChartResult?.data?.words || [])
+      ...(hikingChartResult?.data?.words || []),
+      ...(pacerStepsResult?.data?.words || [])
     ];
     const filteredWords = mergedWords
       .filter((word) => word?.text?.trim())

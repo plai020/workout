@@ -191,7 +191,8 @@ body.dark-mode input::placeholder {
 .calendar-select {
     font-size: 18px;
     font-weight: bold;
-    padding: 4px 8px;
+    padding: 4px 0;
+    text-indent: 5px;
     border-radius: 8px;
     border: 1px solid rgba(0,0,0,0.1);
     background: var(--card-bg);
@@ -201,7 +202,13 @@ body.dark-mode input::placeholder {
     -moz-appearance: none;
     appearance: none;
     text-align: center;
-    min-width: 65px;
+    text-align-last: center;
+}
+#year-select {
+    width: 65px;
+}
+#month-select {
+    width: 45px;
 }
 .calendar-select-sep {
     font-size: 18px;
