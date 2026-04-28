@@ -201,6 +201,7 @@ body.dark-mode input::placeholder {
     -moz-appearance: none;
     appearance: none;
     text-align: center;
+    min-width: 65px;
 }
 .calendar-select-sep {
     font-size: 18px;

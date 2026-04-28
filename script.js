@@ -742,6 +742,36 @@ function cropImageRegion(imgElement, startYRatio = 0, endYRatio = 1, scale = 1) 
   return canvas.toDataURL('image/png');
 }
 
+function cropAndEnhanceHikingChart(imgElement) {
+  const canvas = document.createElement('canvas');
+  const ctx = canvas.getContext('2d');
+  const sourceWidth = imgElement.naturalWidth;
+  const sourceHeight = imgElement.naturalHeight;
+  const startY = Math.floor(sourceHeight * 0.4);
+  const endY = Math.ceil(sourceHeight * 0.75);
+  const cropHeight = Math.max(1, endY - startY);
+  const scale = 2.5;
+  canvas.width = Math.round(sourceWidth * scale);
+  canvas.height = Math.round(cropHeight * scale);
+  
+  ctx.drawImage(imgElement, 0, startY, sourceWidth, cropHeight, 0, 0, canvas.width, canvas.height);
+  
+  const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  const data = imageData.data;
+  for (let i = 0; i < data.length; i += 4) {
+    const gray = 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
+    // Light grey text is around 180-220. White is ~255.
+    // Anything darker than 245 becomes black to capture faint text.
+    if (gray < 245) {
+      data[i] = data[i+1] = data[i+2] = 0;
+    } else {
+      data[i] = data[i+1] = data[i+2] = 255;
+    }
+  }
+  ctx.putImageData(imageData, 0, 0);
+  return canvas.toDataURL('image/png');
+}
+
 let tesseractWorker = null;
 async function getTesseractWorker() {
   if (tesseractWorker) return tesseractWorker;
@@ -803,7 +833,7 @@ async function handleOCR(file) {
     const processed = await preprocessImage(img);
     const statsFocusOriginal = cropImageRegion(img, 0.12, 0.5, 1.4);
     const topSummaryFocus = cropImageRegion(img, 0.16, 0.33, 2);
-    const hikingChartFocus = cropImageRegion(img, 0.4, 0.72, 2.2);
+    const hikingChartFocus = cropAndEnhanceHikingChart(img);
     const worker = await getTesseractWorker();
     const processedResult = await worker.recognize(processed.dataUrl);
     const originalResult = await worker.recognize(originalDataUrl);
@@ -914,8 +944,24 @@ function applyOcrNumbers(text) {
   if (firstDecimal) setFieldValue('f-dist', firstDecimal);
 }
 
+function fixOcrTypos(text) {
+  return text
+    .replace(/\b[O०o]\d/g, match => '0' + match.substring(1))
+    .replace(/\d[O०o]\b/g, match => match[0] + '0')
+    .replace(/\b[lI]\.\d/g, match => '1' + match.substring(1))
+    .replace(/\b[Zz]\.\d/g, match => '2' + match.substring(1))
+    .replace(/\b[Ss]\.\d/g, match => '5' + match.substring(1))
+    .replace(/\b[Bb]\.\d/g, match => '8' + match.substring(1))
+    .replace(/(\d)[O०o](\d)/g, '$10$2')
+    .replace(/(\d)[lI](\d)/g, '$11$2')
+    .replace(/(\d)[Zz](\d)/g, '$12$2')
+    .replace(/(\d)[Ss](\d)/g, '$15$2')
+    .replace(/(\d)[Bb](\d)/g, '$18$2');
+}
+
 function stripOcrNoise(text) {
-  return String(text || '')
+  const fixedText = fixOcrTypos(text || '');
+  return String(fixedText)
     .replace(/\d{4}\s*[\/\-年\.]\s*\d{1,2}\s*[\/\-月\.]\s*\d{1,2}\s*日?/g, ' ')
     .replace(/^(?:\[\|\s*)?\d{1,2}:\d{2}(?:\s*,)?\s*(?:ol|oil|as|il|all)?\s*(?:4G|5G)?/gim, ' ')
     .replace(/\b(?:4G|5G|GPS|Progress|kCal)\b/gi, ' ')
@@ -968,6 +1014,30 @@ function extractRunningMetrics(text) {
     metrics.distance = topTriplet[1];
   }
 
+  // Cross-validate distance with speed and duration if possible (Fix 1.37 vs 7.37)
+  if (metrics.distance && metrics.duration && metrics.avgSpeed) {
+    const d = Number(metrics.distance);
+    const s = Number(metrics.avgSpeed);
+    const timeParts = metrics.duration.split(':').map(Number);
+    if (timeParts.length === 3) {
+      const hours = timeParts[0] + timeParts[1] / 60 + timeParts[2] / 3600;
+      const expectedD = s * hours;
+      if (Math.abs(d - expectedD) > 1.0) {
+        if (metrics.distance.startsWith('1')) {
+          const try7 = '7' + metrics.distance.substring(1);
+          if (Math.abs(Number(try7) - expectedD) < Math.abs(d - expectedD)) {
+            metrics.distance = try7;
+          }
+        } else if (metrics.distance.startsWith('7')) {
+          const try1 = '1' + metrics.distance.substring(1);
+          if (Math.abs(Number(try1) - expectedD) < Math.abs(d - expectedD)) {
+            metrics.distance = try1;
+          }
+        }
+      }
+    }
+  }
+
   return metrics;
 }
 
@@ -1010,13 +1080,38 @@ function extractHikingbookMetrics(text) {
     }
   }
 
-  const allTwoToThreeDigits = (text.match(/\d{2,3}/g) || []).map(Number).filter(Number.isFinite);
-  if (allTwoToThreeDigits.length >= 3) {
-    const high = allTwoToThreeDigits[allTwoToThreeDigits.length - 3];
-    const low = allTwoToThreeDigits[allTwoToThreeDigits.length - 2];
-    if (Number.isFinite(high) && Number.isFinite(low) && high > low) {
-      metrics.elevGain = high - low;
+  // Attempt to find the two elevation numbers for difference
+  // Normally they are 2-4 digit numbers separated by spaces or newlines at the end of the text
+  const allNumbers = (text.match(/\b\d{2,4}\b/g) || []).map(Number).filter(Number.isFinite);
+  // Find pairs of numbers where one is significantly larger than the other, and difference is roughly ascent
+  // Or simply look for the max and min of the isolated chart numbers if they were captured
+  if (allNumbers.length >= 2) {
+    // A heuristic: the highest elevation is usually > 100, the lowest is usually < highest.
+    // Let's see if any pair matches closely with `ascent`.
+    // Actually, Hikingbook chart numbers are often at the very end of the OCR text.
+    const lastFew = allNumbers.slice(-4);
+    if (lastFew.length >= 2) {
+      let maxNum = Math.max(...lastFew);
+      let minNum = Math.min(...lastFew);
+      if (maxNum > minNum && maxNum - minNum > 10) {
+        metrics.elevGain = maxNum - minNum;
+      }
     }
+  }
+
+  // Override elevGain if we can find exact chart numbers like 371 and 41 directly from text
+  // Since we use cropAndEnhanceHikingChart, they might be cleanly recognized.
+  const chartMatches = text.match(/\b(\d{2,4})\b[\s\S]{0,30}\b(\d{2,4})\b/g);
+  if (chartMatches) {
+    chartMatches.forEach(match => {
+      const nums = match.match(/\d{2,4}/g).map(Number);
+      if (nums.length === 2 && nums[0] !== nums[1]) {
+        const diff = Math.abs(nums[0] - nums[1]);
+        if (diff > 10 && (!metrics.elevGain || diff > metrics.elevGain)) {
+          metrics.elevGain = diff;
+        }
+      }
+    });
   }
 
   metrics.distance = normalizeOcrNumber(metrics.distance);
