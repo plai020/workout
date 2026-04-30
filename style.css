@@ -422,7 +422,7 @@ body.dark-mode .card-gym { background: #311b92 !important; color: #ea80fc; }
 /* 馬錶全螢幕模式 */
 #timer-modal {
     position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
-    background: rgba(0, 0, 0, 0.95); /* 更深的黑色 */
+    background: rgba(0, 0, 0, 0.6); /* 半透明黑色 */
     z-index: 10000; display: none;
     flex-direction: column; align-items: center; justify-content: center;
     color: white;
@@ -579,4 +579,4 @@ body.dark-mode .card-gym { background: #311b92 !important; color: #ea80fc; }
 
 /* 馬錶警示 */
 .timer-blink { animation: blink-red 0.5s infinite; }
-@keyframes blink-red { 0% { background: var(--card-bg); } 50% { background: #ffcccc; } }
+@keyframes blink-red { 0% { background: rgba(0, 0, 0, 0.6); } 50% { background: rgba(255, 0, 0, 0.6); } }

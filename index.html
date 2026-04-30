@@ -53,7 +53,7 @@
                 <div class="ocr-section">
                     <input type="file" id="ocr-upload" accept="image/*" hidden>
                     <div class="ocr-actions">
-                        <button type="button" class="ocr-btn" onclick="document.getElementById('ocr-upload').click()">📷 智慧辨識 (Running/Hiking/Pacer)</button>
+                        <button type="button" class="ocr-btn" onclick="document.getElementById('ocr-upload').click()">📷 智慧辨識 (Running/Hiking/StepsApp)</button>
                         <button type="button" class="clear-ocr-btn" onclick="clearFormInputs()">🗑️ 清空輸入</button>
                     </div>
                     <p id="ocr-status"></p>
@@ -101,8 +101,11 @@
 
         <section id="backup-view" class="view-section overlay">
             <button class="close-overlay" onclick="closeOverlay('backup-view', event)">✕</button>
-            <h2>資料備份</h2>
+            <h2>資料備份與同步</h2>
             <div class="backup-options">
+                <input type="text" id="gsheets-url" placeholder="輸入 Google Sheets Web App URL" style="margin-bottom: 10px;">
+                <button onclick="syncToGoogleSheets()" class="backup-btn" style="background:#4caf50;">🔄 一鍵同步至 Google Sheets</button>
+                <hr style="width: 100%; border: 0; border-top: 1px solid rgba(0,0,0,0.1); margin: 20px 0;">
                 <button onclick="exportData()" class="backup-btn">💾 匯出資料 (JSON)</button>
                 <input type="file" id="import-file" hidden>
                 <button onclick="document.getElementById('import-file').click()" class="backup-btn">📂 匯入資料</button>

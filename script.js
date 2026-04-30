@@ -47,6 +47,7 @@ document.addEventListener('DOMContentLoaded', () => {
   initWorkoutFormSubmit();
   renderGymManageList();
   initBackupImport();
+  initGoogleSheetsSync();
 });
 
 function initStatDateDefaults() {
@@ -329,7 +330,13 @@ function typeLabel(t) {
 }
 
 function summaryLine(r) {
-  if (r.type === 'gym') return `${r.part || ''} ${r.action || ''} ${r.weight || 0}kg ×${r.sets || 0}×${r.reps || 0}`;
+  if (r.type === 'gym') {
+    if (r.seconds) {
+      return `${r.part || ''} ${r.action || ''} ${r.sets || 0}組×${r.seconds}秒`;
+    } else {
+      return `${r.part || ''} ${r.action || ''} ${r.weight || 0}kg ×${r.sets || 0}×${r.reps || 0}次`;
+    }
+  }
   const parts = [];
   if (r.title) parts.push(`[${r.title}]`);
   if (r.distance != null) parts.push(`${r.distance} km`);
@@ -505,7 +512,6 @@ function renderFields(type) {
     if (type === 'climb') {
       html += `
         <input type="number" step="0.01" id="f-avg-speed" placeholder="平均速度 (km/h)">
-        <input type="number" step="0.01" id="f-elev-gain" placeholder="高度落差 (m)">
         <input type="number" step="0.01" id="f-ascent" placeholder="累計爬升 (m)">
         <input type="number" step="0.01" id="f-descent" placeholder="累計下降 (m)">
       `;
@@ -652,7 +658,6 @@ function initWorkoutFormSubmit() {
       }
       if (currentFormType === 'climb') {
         rec.avgSpeed = numOrNull(document.getElementById('f-avg-speed')?.value, 1);
-        rec.elevGain = numOrNull(document.getElementById('f-elev-gain')?.value);
         rec.ascent = numOrNull(document.getElementById('f-ascent')?.value);
         rec.descent = numOrNull(document.getElementById('f-descent')?.value);
       }
@@ -772,7 +777,7 @@ function cropAndEnhanceHikingChart(imgElement) {
   return canvas.toDataURL('image/png');
 }
 
-function cropPacerStepsFocus(imgElement) {
+function cropStepsAppFocus(imgElement) {
   const canvas = document.createElement('canvas');
   const ctx = canvas.getContext('2d');
   const sourceWidth = imgElement.naturalWidth;
@@ -864,14 +869,14 @@ async function handleOCR(file) {
     const statsFocusOriginal = cropImageRegion(img, 0.12, 0.5, 1.4);
     const topSummaryFocus = cropImageRegion(img, 0.16, 0.33, 2);
     const hikingChartFocus = cropAndEnhanceHikingChart(img);
-    const pacerStepsFocus = cropPacerStepsFocus(img);
+    const pacerStepsFocus = cropStepsAppFocus(img);
     const worker = await getTesseractWorker();
     const processedResult = await worker.recognize(processed.dataUrl);
     const originalResult = await worker.recognize(originalDataUrl);
     const focusOriginalResult = await worker.recognize(statsFocusOriginal);
     const topSummaryResult = await worker.recognize(topSummaryFocus);
     const hikingChartResult = await worker.recognize(hikingChartFocus);
-    const pacerStepsResult = await worker.recognize(pacerStepsFocus);
+    const stepsAppStepsResult = await worker.recognize(pacerStepsFocus);
 
     clearTimeout(timeoutMsg);
 
@@ -880,8 +885,8 @@ async function handleOCR(file) {
     const focusOriginalText = (focusOriginalResult?.data?.text || '').trim();
     const topSummaryText = (topSummaryResult?.data?.text || '').trim();
     const hikingChartText = (hikingChartResult?.data?.text || '').trim();
-    const pacerStepsText = (pacerStepsResult?.data?.text || '').trim();
-    const rawText = [processedText, originalText, focusOriginalText, topSummaryText, hikingChartText, pacerStepsText].filter(Boolean).join('\n');
+    const stepsAppStepsText = (stepsAppStepsResult?.data?.text || '').trim();
+    const rawText = [processedText, originalText, focusOriginalText, topSummaryText, hikingChartText, stepsAppStepsText].filter(Boolean).join('\n');
     console.log('[OCR raw text]', rawText);
 
     const mergedWords = [
@@ -890,7 +895,7 @@ async function handleOCR(file) {
       ...(focusOriginalResult?.data?.words || []),
       ...(topSummaryResult?.data?.words || []),
       ...(hikingChartResult?.data?.words || []),
-      ...(pacerStepsResult?.data?.words || [])
+      ...(stepsAppStepsResult?.data?.words || [])
     ];
     const filteredWords = mergedWords
       .filter((word) => word?.text?.trim())
@@ -1213,43 +1218,21 @@ function extractHikingbookMetrics(text) {
   return metrics;
 }
 
-function extractPacerMetrics(text) {
+function extractStepsAppMetrics(text) {
   const cleaned = stripOcrNoise(text);
+  const metrics = {};
 
-  // Extract calories first with broader match (3-4 digit number near 大卡)
-  const calRaw = extractLabeledValue(cleaned, ['大卡'], '\\d{3,4}');
-  // Also try to find calories as first number before 大卡 label (Pacer layout: "1376 大卡 活躍時間 ...")
-  const calHeaderMatch = cleaned.match(/(\d{3,4})\s*(?:大卡|kcal)/i);
-  const calories = calRaw || calHeaderMatch?.[1] || null;
-
-  const metrics = {
-    distance: extractLabeledValue(cleaned, ['公里'], '\\d+(?:\\.\\d+)?'),
-    calories,
-    steps: extractFirstMatch(text, [
-      /(\d{3,5})[\s\S]{0,20}?步數目標/,
-      /步數目標[:：]?\s*\d+[\s\S]{0,20}?(\d{3,5})/
-    ])
-  };
-
-  const timeMatch = cleaned.match(/(?:活躍時間)?[\s\S]{0,12}?(\d+)\s*h[\s\S]{0,8}?(\d+)\s*m/i);
-  if (timeMatch) {
-    metrics.hours = timeMatch[1];
-    metrics.minutes = timeMatch[2];
-  }
-
-  const orderedSummary = cleaned.match(/(\d{1,4})\s+(\d+)h\s*(\d+)m\s+(\d+(?:\.\d+)?)/i);
-  if (orderedSummary) {
-    metrics.calories = metrics.calories || orderedSummary[1];
-    metrics.hours = metrics.hours || orderedSummary[2];
-    metrics.minutes = metrics.minutes || orderedSummary[3];
-    // orderedSummary is a structured "Xcal Xh Xm X.Xkm" layout — always trust its distance over labeled search
-    metrics.distance = orderedSummary[4];
-  }
-
-  if (!metrics.date) {
-    const pacerDate = text.match(/\d{4}\s*年\s*\d{1,2}\s*月\s*\d{1,2}\s*日/);
-    if (pacerDate) {
-      metrics.date = pacerDate[0]
+  const today = new Date();
+  if (/今天/.test(cleaned)) {
+    metrics.date = toYMD(today);
+  } else if (/昨日/.test(cleaned)) {
+    const yesterday = new Date(today);
+    yesterday.setDate(today.getDate() - 1);
+    metrics.date = toYMD(yesterday);
+  } else {
+    const dMatch = text.match(/\d{4}\s*年\s*\d{1,2}\s*月\s*\d{1,2}\s*日/);
+    if (dMatch) {
+      metrics.date = dMatch[0]
         .replace(/\s*/g, '')
         .replace('年', '-')
         .replace('月', '-')
@@ -1257,19 +1240,28 @@ function extractPacerMetrics(text) {
     }
   }
 
-  // Build exclusion set: exclude years, known non-step values, and the calorie value itself
-  const calNum = metrics.calories ? String(metrics.calories).replace(/\D/g, '') : null;
-  const exclusions = new Set(['10000', '2024', '2025', '2026', '2027']);
-  if (calNum) exclusions.add(calNum);
-  // Also exclude calorie value ± 1 to handle OCR digit-drop (e.g. 1376 → 376 or 137)
-  if (calNum && calNum.length === 4) {
-    exclusions.add(calNum.slice(1));   // drop first digit
-    exclusions.add(calNum.slice(0, 3)); // drop last digit
+  metrics.distance = extractLabeledValue(cleaned, ['公里'], '\\d+(?:\\.\\d+)?');
+  metrics.calories = extractLabeledValue(cleaned, ['千卡'], '\\d{2,4}');
+  
+  const hrMinMatch = cleaned.match(/(\\d+)[:：](\\d+)\s*小時/);
+  if (hrMinMatch) {
+    metrics.hours = hrMinMatch[1];
+    metrics.minutes = hrMinMatch[2];
+  } else {
+    const hrMatch = extractLabeledValue(cleaned, ['小時'], '\\d+');
+    const minMatch = extractLabeledValue(cleaned, ['分鐘'], '\\d+');
+    if (hrMatch) metrics.hours = hrMatch;
+    if (minMatch) metrics.minutes = minMatch;
   }
 
-  if (!metrics.steps) {
-    const stepCandidates = (cleaned.match(/\d{4,6}/g) || [])
-      .filter((value) => !exclusions.has(value));
+  const stepMatch = cleaned.match(/(\\d{1,3}(?:[,\\s]\\d{3})+|\\d{4,6})(?=\s*步)/);
+  if (stepMatch) {
+    metrics.steps = stepMatch[1].replace(/[,\\s]/g, '');
+  } else {
+    const exclusions = new Set(['2024', '2025', '2026', '2027', '4500', '5000', '10000']);
+    if (metrics.calories) exclusions.add(String(metrics.calories).replace(/\D/g, ''));
+    const stepCandidates = (cleaned.match(/\\d{3,6}/g) || [])
+      .filter((val) => !exclusions.has(val));
     if (stepCandidates.length > 0) {
       metrics.steps = stepCandidates
         .map(Number)
@@ -1285,12 +1277,12 @@ function inferOcrAppType(rawText, normalizedText) {
   const combined = `${rawText} ${normalizedText}`.replace(/\s+/g, ' ').trim();
   const runningMetrics = extractRunningMetrics(combined);
   const hikingMetrics = extractHikingbookMetrics(combined);
-  const pacerMetrics = extractPacerMetrics(combined);
+  const stepsMetrics = extractStepsAppMetrics(combined);
 
   if (/Distance|Duration|Average Pace|Average Speed|Max\.?\s*Speed|Elevation/i.test(combined)) return 'Running App';
   if (runningMetrics.distance && (runningMetrics.duration || runningMetrics.avgPace || runningMetrics.avgSpeed)) return 'Running App';
-  if (/步數目標|活躍時間|大卡|公里|202\d年\d{1,2}月\d{1,2}日/.test(combined) && (pacerMetrics.steps || pacerMetrics.minutes || pacerMetrics.calories)) return 'Pacer';
-  if (pacerMetrics.distance && (pacerMetrics.steps || pacerMetrics.minutes || pacerMetrics.calories)) return 'Pacer';
+  if (/StepsApp|千卡|公里|今天|昨日|小時|分鐘|步/.test(combined) && (stepsMetrics.steps || stepsMetrics.minutes || stepsMetrics.calories || stepsMetrics.distance)) return 'StepsApp';
+  if (stepsMetrics.distance && (stepsMetrics.steps || stepsMetrics.minutes || stepsMetrics.calories)) return 'StepsApp';
   if (/總爬升|總下降|平均速度|新增路況回報|km\/h|kCal|時間|距離/.test(combined) && (hikingMetrics.ascent || hikingMetrics.descent || hikingMetrics.avgSpeed || hikingMetrics.hours)) return 'Hikingbook';
   if (hikingMetrics.distance && (hikingMetrics.ascent || hikingMetrics.descent || hikingMetrics.avgSpeed || hikingMetrics.hours)) return 'Hikingbook';
   return '';
@@ -1316,7 +1308,7 @@ function normalizeOcrWords(words) {
 
 function detectOcrAppType(text) {
   if (/Distance|Duration|Average Pace/i.test(text)) return 'Running App';
-  if (/Pacer|大卡|步數|步數目標/.test(text)) return 'Pacer';
+  if (/StepsApp|千卡|步數|今天|昨日/.test(text)) return 'StepsApp';
   if (/Hikingbook|總爬升|平均速度|距離/.test(text)) return 'Hikingbook';
   return '';
 }
@@ -1463,8 +1455,8 @@ function smartOCR({ words, fullText }) {
   const originalText = rawText.replace(/\s+/g, ' ').trim();
   const normalizedWords = normalizeOcrWords(words);
   const wordText = normalizedWords.map((word) => word.text).join(' ');
-  const pacerMetricsForDate = extractPacerMetrics(rawText);
-  const detectedDate = detectDate(originalText) || detectDate(wordText) || pacerMetricsForDate.date || '';
+  const stepsMetricsForDate = extractStepsAppMetrics(rawText);
+  const detectedDate = detectDate(originalText) || detectDate(wordText) || stepsMetricsForDate.date || '';
   const text = originalText.replace(/(?:19|20)\d{2}\s*[\/\-年\.]\s*\d{1,2}\s*[\/\-月\.]\s*\d{1,2}\s*日?/g, '').trim();
   console.log('[OCR sanitized text]', text);
 
@@ -1480,7 +1472,7 @@ function smartOCR({ words, fullText }) {
 
   let workoutType = 'run';
   if (appType === 'Hikingbook') workoutType = 'climb';
-  if (appType === 'Pacer') workoutType = 'walk';
+  if (appType === 'StepsApp') workoutType = 'walk';
   activateOcrForm(workoutType);
   if (detectedDate) setFieldValue('f-date', detectedDate);
 
@@ -1578,10 +1570,8 @@ function smartOCR({ words, fullText }) {
       if (descentWordMatch) resolvedDescent = descentWordMatch.value;
     }
     if (resolvedDescent) markSuccess('f-descent', resolvedDescent);
-
-    if (metrics.elevGain) markSuccess('f-elev-gain', metrics.elevGain);
-  } else if (appType === 'Pacer') {
-    const metrics = extractPacerMetrics(rawText);
+  } else if (appType === 'StepsApp') {
+    const metrics = extractStepsAppMetrics(rawText);
     const distMatch = metrics.distance ? { value: metrics.distance } : findNearbyValue(normalizedWords, ['公里', '距離'], 'num', {
       directions: ['below', 'left', 'right'],
       maxDistance: 260,
@@ -1880,4 +1870,53 @@ function initBackupImport() {
     }
     inp.value = '';
   });
+}
+
+
+// --- Google Sheets 同步 ---
+function initGoogleSheetsSync() {
+  const urlInput = document.getElementById('gsheets-url');
+  if (urlInput) {
+    urlInput.value = localStorage.getItem('gsheets_url') || '';
+  }
+}
+
+async function syncToGoogleSheets() {
+  const urlInput = document.getElementById('gsheets-url');
+  if (!urlInput) return;
+  const url = urlInput.value.trim();
+  
+  if (!url) {
+    alert('請輸入 Google Sheets Web App URL！');
+    return;
+  }
+  
+  localStorage.setItem('gsheets_url', url);
+  
+  const btn = document.querySelector('button[onclick="syncToGoogleSheets()"]');
+  const originalText = btn.innerHTML;
+  btn.innerHTML = '⏳ 正在同步中...';
+  btn.disabled = true;
+  
+  try {
+    const response = await fetch(url, {
+      method: 'POST',
+      body: JSON.stringify(records),
+      headers: {
+        'Content-Type': 'text/plain;charset=utf-8',
+      }
+    });
+    
+    const result = await response.json();
+    if (result.status === 'success') {
+      alert(`同步成功！新增了 ${result.addedCount} 筆紀錄。`);
+    } else {
+      alert('同步失敗：' + (result.message || '未知錯誤'));
+    }
+  } catch (err) {
+    alert('網路錯誤或跨網域請求失敗，請檢查 URL 或是網路連線。錯誤訊息：' + err.message);
+  } finally {
+    btn.innerHTML = originalText;
+    btn.disabled = false;
+  }
 }
