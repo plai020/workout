@@ -35,6 +35,29 @@ let chartGymInst = null;
 /** 新增表單目前選擇的 type（供儲存用） */
 let currentFormType = 'run';
 
+// --- V4.22 網址參數同步邏輯 ---
+const urlParams = new URLSearchParams(window.location.search);
+if (urlParams.get('sync') === 'true') {
+    const newRecord = {
+        id: Date.now(),
+        date: urlParams.get('date'),
+        title: urlParams.get('title'),
+        type: urlParams.get('type') === '跑步' ? 'run' : (urlParams.get('type') === '登山' ? 'climb' : 'walk'),
+        distance: parseFloat(urlParams.get('dist')) || 0,
+        hours: parseInt(urlParams.get('hr')) || 0,
+        minutes: parseInt(urlParams.get('min')) || 0,
+        // ...補齊其他欄位
+    };
+    
+    records.push(newRecord);
+    localStorage.setItem('workout_records', JSON.stringify(records));
+    
+    // 清除網址參數，避免重整網頁重複加入
+    window.history.replaceState({}, document.title, window.location.pathname);
+    alert('✅ 已從 Telegram 同步一筆新紀錄！');
+    renderCalendar(); // 重新渲染月曆
+}
+
 document.addEventListener('DOMContentLoaded', () => {
   initStatDateDefaults();
   initNavigation();
