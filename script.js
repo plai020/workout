@@ -334,7 +334,7 @@ function summaryLine(r) {
     if (r.seconds) {
       return `${r.part || ''} ${r.action || ''} ${r.sets || 0}組×${r.seconds}秒`;
     } else {
-      return `${r.part || ''} ${r.action || ''} ${r.weight || 0}kg ×${r.sets || 0}×${r.reps || 0}次`;
+      return `${r.part || ''} ${r.action || ''} ${r.weight || 0}kg ×${r.sets || 0}組×${r.reps || 0}次`;
     }
   }
   const parts = [];
@@ -1230,37 +1230,56 @@ function extractStepsAppMetrics(text) {
     yesterday.setDate(today.getDate() - 1);
     metrics.date = toYMD(yesterday);
   } else {
-    const dMatch = text.match(/\d{4}\s*年\s*\d{1,2}\s*月\s*\d{1,2}\s*日/);
+    const dMatch = cleaned.match(/\d{4}\s*[\/\-年]\s*\d{1,2}\s*[\/\-月]\s*\d{1,2}(?:\s*日)?/);
     if (dMatch) {
       metrics.date = dMatch[0]
         .replace(/\s*/g, '')
-        .replace('年', '-')
-        .replace('月', '-')
-        .replace('日', '');
+        .replace(/[年月]/g, '-')
+        .replace(/日/g, '')
+        .replace(/\//g, '-');
     }
   }
 
-  metrics.distance = extractLabeledValue(cleaned, ['公里'], '\\d+(?:\\.\\d+)?');
-  metrics.calories = extractLabeledValue(cleaned, ['千卡'], '\\d{2,4}');
-  
-  const hrMinMatch = cleaned.match(/(\\d+)[:：](\\d+)\s*小時/);
-  if (hrMinMatch) {
-    metrics.hours = hrMinMatch[1];
-    metrics.minutes = hrMinMatch[2];
-  } else {
-    const hrMatch = extractLabeledValue(cleaned, ['小時'], '\\d+');
-    const minMatch = extractLabeledValue(cleaned, ['分鐘'], '\\d+');
-    if (hrMatch) metrics.hours = hrMatch;
-    if (minMatch) metrics.minutes = minMatch;
+  // Sequence match for Streak / Calories / Distance / Time
+  const seqMatch = cleaned.match(/(?:\b|®)\d+[^\d.]+(\d{2,4})[^\d.]+(\d+(?:\.\d+)?)[^\d.]+(\d+[:：]\d+|\d{1,3})(?:[^\d]|$)/);
+  if (seqMatch) {
+    metrics.calories = seqMatch[1];
+    metrics.distance = seqMatch[2];
+    const timeStr = seqMatch[3];
+    if (timeStr.includes(':') || timeStr.includes('：')) {
+      const parts = timeStr.split(/[:：]/);
+      metrics.hours = parts[0];
+      metrics.minutes = parts[1];
+    } else {
+      metrics.hours = '0';
+      metrics.minutes = timeStr;
+    }
   }
 
-  const stepMatch = cleaned.match(/(\\d{1,3}(?:[,\\s]\\d{3})+|\\d{4,6})(?=\s*步)/);
+  // Fallback labeled extraction
+  if (!metrics.distance) metrics.distance = extractLabeledValue(cleaned, ['公里'], '\\d+(?:\\.\\d+)?');
+  if (!metrics.calories) metrics.calories = extractLabeledValue(cleaned, ['千卡'], '\\d{2,4}');
+  
+  if (!metrics.hours && !metrics.minutes) {
+    const hrMinMatch = cleaned.match(/(\d+)[:：](\d+)\s*[小小時]/);
+    if (hrMinMatch) {
+      metrics.hours = hrMinMatch[1];
+      metrics.minutes = hrMinMatch[2];
+    } else {
+      const hrMatch = extractLabeledValue(cleaned, ['小時'], '\\d+');
+      const minMatch = extractLabeledValue(cleaned, ['分鐘'], '\\d+');
+      if (hrMatch) metrics.hours = hrMatch;
+      if (minMatch) metrics.minutes = minMatch;
+    }
+  }
+
+  const stepMatch = cleaned.match(/(\d{1,3}(?:[,\s]\d{3})+|\d{4,6})(?=\s*步)/);
   if (stepMatch) {
-    metrics.steps = stepMatch[1].replace(/[,\\s]/g, '');
+    metrics.steps = stepMatch[1].replace(/[,\s]/g, '');
   } else {
     const exclusions = new Set(['2024', '2025', '2026', '2027', '4500', '5000', '10000']);
     if (metrics.calories) exclusions.add(String(metrics.calories).replace(/\D/g, ''));
-    const stepCandidates = (cleaned.match(/\\d{3,6}/g) || [])
+    const stepCandidates = (cleaned.match(/\d{3,6}/g) || [])
       .filter((val) => !exclusions.has(val));
     if (stepCandidates.length > 0) {
       metrics.steps = stepCandidates

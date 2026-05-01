@@ -422,7 +422,7 @@ body.dark-mode .card-gym { background: #311b92 !important; color: #ea80fc; }
 /* 馬錶全螢幕模式 */
 #timer-modal {
     position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
-    background: rgba(0, 0, 0, 0.6); /* 半透明黑色 */
+    background: #000000; /* 全黑，蓋住下方畫面 */
     z-index: 10000; display: none;
     flex-direction: column; align-items: center; justify-content: center;
     color: white;
@@ -463,14 +463,7 @@ body.dark-mode .card-gym { background: #311b92 !important; color: #ea80fc; }
     background: #f44336; color: white; border: none; font-size: 20px; font-weight: bold;
 }
 
-/* 柔和呼吸燈效果 */
-.timer-blink {
-    animation: breathing-soft 10s ease-in-out infinite;
-}
-@keyframes breathing-soft {
-    0%, 100% { background: rgba(0, 0, 0, 0.95); }
-    50% { background: #FFEBEE; color: #b71c1c; }
-}
+/* 柔和呼吸燈效果 (已移除，改由下方 blink-red 取代) */
 
 /* 管理頁面分組樣式 */
 #gym-manage-container {
@@ -578,5 +571,5 @@ body.dark-mode .card-gym { background: #311b92 !important; color: #ea80fc; }
 .detail-card { margin-bottom: 15px; padding: 15px; border-radius: 18px; position: relative; }
 
 /* 馬錶警示 */
-.timer-blink { animation: blink-red 0.5s infinite; }
-@keyframes blink-red { 0% { background: rgba(0, 0, 0, 0.6); } 50% { background: rgba(255, 0, 0, 0.6); } }
+.timer-blink { animation: blink-red 0.4s infinite !important; }
+@keyframes blink-red { 0% { background: #000000; } 50% { background: #d32f2f; } }
