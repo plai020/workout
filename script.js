@@ -1242,7 +1242,7 @@ function extractStepsAppMetrics(text) {
 
   // Sequence match for Streak / Calories / Distance / Time
   // Use a stricter separator to avoid matching random dates or steps
-  const seqMatch = cleaned.match(/(?:®?\d+|os|0s)\s*[%®©|]*\s*(\d{2,4})\s*[%®©|]*\s*(\d+(?:\.\d+)?)\s*[%®©|]*\s*(\d+[:：]\d+|\d{1,3})(?:[^\d]|$)/);
+  const seqMatch = cleaned.match(/(?:®?\d+|os|0s)[%®©|E\s]+(\d{2,4})[%®©|E\s]+(\d+(?:\.\d+)?)[%®©|E\s]+(\d+[:：]\d+|\d{1,3})(?:[^\d]|$)/);
   if (seqMatch) {
     metrics.calories = seqMatch[1];
     metrics.distance = seqMatch[2];
