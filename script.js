@@ -1241,7 +1241,8 @@ function extractStepsAppMetrics(text) {
   }
 
   // Sequence match for Streak / Calories / Distance / Time
-  const seqMatch = cleaned.match(/(?:\b|®)\d+[^\d.]+(\d{2,4})[^\d.]+(\d+(?:\.\d+)?)[^\d.]+(\d+[:：]\d+|\d{1,3})(?:[^\d]|$)/);
+  // Use a stricter separator [^\d,/#]+ to avoid matching random dates or steps containing commas or slashes
+  const seqMatch = cleaned.match(/(?:®?\d+|os)[^\d,/#]+(\d{2,4})[^\d,/#]+(\d+(?:\.\d+)?)[^\d,/#]+(\d+[:：]\d+|\d{1,3})(?:[^\d]|$)/);
   if (seqMatch) {
     metrics.calories = seqMatch[1];
     metrics.distance = seqMatch[2];
@@ -1287,6 +1288,12 @@ function extractStepsAppMetrics(text) {
         .filter((value) => value >= 1000 && value <= 200000)
         .sort((a, b) => b - a)[0]?.toString() || null;
     }
+  }
+
+  // StepsApp distance always has a decimal (e.g. 5.0, 20.1). 
+  // If OCR misses the dot (e.g. 50, 201), we restore it.
+  if (metrics.distance && !metrics.distance.includes('.')) {
+    metrics.distance = (Number(metrics.distance) / 10).toFixed(1);
   }
 
   return metrics;

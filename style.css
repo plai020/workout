@@ -572,4 +572,4 @@ body.dark-mode .card-gym { background: #311b92 !important; color: #ea80fc; }
 
 /* 馬錶警示 */
 .timer-blink { animation: blink-red 0.4s infinite !important; }
-@keyframes blink-red { 0% { background: #000000; } 50% { background: #d32f2f; } }
+@keyframes blink-red { 0%, 100% { background-color: #000000; } 50% { background-color: #ff0000; } }
