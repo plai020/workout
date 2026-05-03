@@ -1252,8 +1252,13 @@ function extractStepsAppMetrics(text) {
       metrics.hours = parts[0];
       metrics.minutes = parts[1];
     } else {
-      metrics.hours = '0';
-      metrics.minutes = timeStr;
+      if (timeStr.length >= 3) {
+        metrics.hours = timeStr.slice(0, -2);
+        metrics.minutes = timeStr.slice(-2);
+      } else {
+        metrics.hours = '0';
+        metrics.minutes = timeStr;
+      }
     }
   }
 
@@ -1274,19 +1279,33 @@ function extractStepsAppMetrics(text) {
     }
   }
 
-  const stepMatch = cleaned.match(/(\d{1,3}(?:[,\s]\d{3})+|\d{4,6})(?=\s*步)/);
+  const stepMatch = cleaned.match(/(\d{1,3}(?:[,，\s]\d{3})+|\d{4,6})(?=\s*步)/);
   if (stepMatch) {
-    metrics.steps = stepMatch[1].replace(/[,\s]/g, '');
+    metrics.steps = stepMatch[1].replace(/[,，\s]/g, '');
   } else {
     const exclusions = new Set(['2024', '2025', '2026', '2027', '4500', '5000', '10000']);
     if (metrics.calories) exclusions.add(String(metrics.calories).replace(/\D/g, ''));
-    const stepCandidates = (cleaned.match(/\d{3,6}/g) || [])
+    const cleanedForFallback = cleaned.replace(/[,，]/g, '');
+    const stepCandidates = (cleanedForFallback.match(/\d{4,6}/g) || [])
       .filter((val) => !exclusions.has(val));
     if (stepCandidates.length > 0) {
-      metrics.steps = stepCandidates
+      const validSteps = stepCandidates
         .map(Number)
-        .filter((value) => value >= 1000 && value <= 200000)
-        .sort((a, b) => b - a)[0]?.toString() || null;
+        .filter((value) => value >= 1000 && value <= 200000);
+      
+      const frequency = {};
+      let maxFreq = 0;
+      let mostFrequentStep = null;
+      for (const step of validSteps) {
+        frequency[step] = (frequency[step] || 0) + 1;
+        if (frequency[step] > maxFreq) {
+          maxFreq = frequency[step];
+          mostFrequentStep = step;
+        } else if (frequency[step] === maxFreq && step > mostFrequentStep) {
+          mostFrequentStep = step;
+        }
+      }
+      metrics.steps = mostFrequentStep?.toString() || null;
     }
   }
 
