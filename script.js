@@ -1019,7 +1019,7 @@ function normalizeOcrNumber(value) {
 
 function extractRunningMetrics(text) {
   const cleaned = stripOcrNoise(text);
-  const topTriplet = cleaned.match(/(\d+(?:\.\d+)?)\s+(\d{1,2}:\d{2}:\d{2})\s+(\d{2,4})/);
+  const topTriplet = cleaned.match(/(\d+(?:\.\d+)?)\s+(\d{1,2}:\d{2}:\d{2})\s+([\d,]{2,6})/);
   const metrics = {
     distance: extractFirstMatch(text, [
       /Distance[\s\S]{0,18}?(\d+(?:\.\d+)?)/i,
@@ -1242,22 +1242,38 @@ function extractStepsAppMetrics(text) {
 
   // Sequence match for Streak / Calories / Distance / Time
   // Use a stricter separator to avoid matching random dates or steps
-  const seqMatch = cleaned.match(/(?:®?\d+|os|0s)[%®©|E\s]+(\d{2,4})[%®©|E\s]+(\d+(?:\.\d+)?)[%®©|E\s]+(\d+[:：]\d+|\d{1,3})(?:[^\d]|$)/);
-  if (seqMatch) {
-    metrics.calories = seqMatch[1];
-    metrics.distance = seqMatch[2];
-    const timeStr = seqMatch[3];
-    if (timeStr.includes(':') || timeStr.includes('：')) {
-      const parts = timeStr.split(/[:：]/);
-      metrics.hours = parts[0];
-      metrics.minutes = parts[1];
-    } else {
-      if (timeStr.length >= 3) {
-        metrics.hours = timeStr.slice(0, -2);
-        metrics.minutes = timeStr.slice(-2);
+  const regex = /(?<![\d,])(?:®?\d+|os|0s)[%®©|E\s]+(\d{2,4})[%®©|E\s]+(\d+(?:\.\d+)?)[%®©|E\s]+(\d+[:：]\d{2}|\d{2,3})(?=[^\d]|$)/g;
+  const matches = [...cleaned.matchAll(regex)];
+  
+  if (matches.length > 0) {
+    let bestMatch = null;
+    let bestScore = -1;
+    for (const m of matches) {
+      let score = 0;
+      if (m[2].includes('.')) score += 2;
+      if (m[3].includes(':') || m[3].includes('：')) score += 2;
+      if (score > bestScore) {
+        bestScore = score;
+        bestMatch = m;
+      }
+    }
+
+    if (bestMatch) {
+      metrics.calories = bestMatch[1];
+      metrics.distance = bestMatch[2];
+      const timeStr = bestMatch[3];
+      if (timeStr.includes(':') || timeStr.includes('：')) {
+        const parts = timeStr.split(/[:：]/);
+        metrics.hours = parts[0];
+        metrics.minutes = parts[1];
       } else {
-        metrics.hours = '0';
-        metrics.minutes = timeStr;
+        if (timeStr.length >= 3) {
+          metrics.hours = timeStr.slice(0, -2);
+          metrics.minutes = timeStr.slice(-2);
+        } else {
+          metrics.hours = '0';
+          metrics.minutes = timeStr;
+        }
       }
     }
   }
